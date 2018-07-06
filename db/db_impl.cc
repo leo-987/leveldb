@@ -1209,7 +1209,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   MutexLock l(&mutex_);
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
-    w.cv.Wait();
+    w.cv.Wait();  // 如果被唤醒，那么这个w肯定是在队列头部，那么就可以跳出while循环
   }
   if (w.done) {
     return w.status;
@@ -1229,6 +1229,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
     {
+      // 这里释放锁，其它线程操作不会到这里，因为writers_队列现在不为空
       mutex_.Unlock();
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));  // 写入log
       bool sync_error = false;
@@ -1267,7 +1268,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
   // Notify new head of write queue
   if (!writers_.empty()) {
-    writers_.front()->cv.Signal();
+    writers_.front()->cv.Signal();  // 从释放锁到这一步之间，可能有多个写操作append进来了，所以要唤醒它们，然后进行下一次批量操作
   }
 
   return status;
