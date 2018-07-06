@@ -100,6 +100,7 @@ void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   dst->append(value.data(), value.size());
 }
 
+// 存储v需要的字节数
 int VarintLength(uint64_t v) {
   int len = 1;
   while (v >= 128) {

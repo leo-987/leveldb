@@ -95,7 +95,7 @@ class SkipList {
   };
 
  private:
-  enum { kMaxHeight = 12 };
+  enum { kMaxHeight = 12 }; // 一个node最高允许12层
 
   // Immutable after construction
   Comparator const compare_;
@@ -255,7 +255,7 @@ int SkipList<Key,Comparator>::RandomHeight() {
 template<typename Key, class Comparator>
 bool SkipList<Key,Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
   // null n is considered infinite
-  return (n != nullptr) && (compare_(n->key, key) < 0);
+  return (n != nullptr) && (compare_(n->key, key) < 0);   // 比较算子见comparator.cc
 }
 
 template<typename Key, class Comparator>
@@ -333,12 +333,13 @@ SkipList<Key,Comparator>::SkipList(Comparator cmp, Arena* arena)
   }
 }
 
+// key中包含kv对，根据key生成一个节点，然后插入跳表
 template<typename Key, class Comparator>
 void SkipList<Key,Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   Node* prev[kMaxHeight];
-  Node* x = FindGreaterOrEqual(key, prev);
+  Node* x = FindGreaterOrEqual(key, prev);  // 返回跳表中大于等于key的节点，并保存所有前驱指针
 
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));
@@ -346,7 +347,7 @@ void SkipList<Key,Comparator>::Insert(const Key& key) {
   int height = RandomHeight();
   if (height > GetMaxHeight()) {
     for (int i = GetMaxHeight(); i < height; i++) {
-      prev[i] = head_;
+      prev[i] = head_;  // 只赋值高出的部分
     }
     //fprintf(stderr, "Change height from %d to %d\n", max_height_, height);
 
@@ -357,11 +358,11 @@ void SkipList<Key,Comparator>::Insert(const Key& key) {
     // the loop below.  In the former case the reader will
     // immediately drop to the next level since nullptr sorts after all
     // keys.  In the latter case the reader will use the new node.
-    max_height_.NoBarrier_Store(reinterpret_cast<void*>(height));
+    max_height_.NoBarrier_Store(reinterpret_cast<void*>(height)); // 更新节点最大高度
   }
 
   x = NewNode(key, height);
-  for (int i = 0; i < height; i++) {
+  for (int i = 0; i < height; i++) {  // 节点插入跳表
     // NoBarrier_SetNext() suffices since we will add a barrier when
     // we publish a pointer to "x" in prev[i].
     x->NoBarrier_SetNext(i, prev[i]->NoBarrier_Next(i));

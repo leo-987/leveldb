@@ -33,6 +33,8 @@ Writer::Writer(WritableFile* dest, uint64_t dest_length)
 Writer::~Writer() {
 }
 
+// slice按32KB切分，顺序写入log
+// 每写入一次，都需要在头部加上checksum+length+type
 Status Writer::AddRecord(const Slice& slice) {
   const char* ptr = slice.data();
   size_t left = slice.size();
@@ -87,9 +89,9 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
 
   // Format the header
   char buf[kHeaderSize];
-  buf[4] = static_cast<char>(n & 0xff);
-  buf[5] = static_cast<char>(n >> 8);
-  buf[6] = static_cast<char>(t);
+  buf[4] = static_cast<char>(n & 0xff); // length
+  buf[5] = static_cast<char>(n >> 8);   // length
+  buf[6] = static_cast<char>(t);        // type
 
   // Compute the crc of the record type and the payload.
   uint32_t crc = crc32c::Extend(type_crc_[t], ptr, n);

@@ -29,6 +29,7 @@ class WriteBatchInternal {
   // this batch.
   static void SetSequence(WriteBatch* batch, SequenceNumber seq);
 
+  // 用WriteBatch中的rep_构建一个Slice并返回这个Slice
   static Slice Contents(const WriteBatch* batch) {
     return Slice(batch->rep_);
   }

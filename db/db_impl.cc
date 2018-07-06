@@ -43,8 +43,8 @@ const int kNumNonTableCacheFiles = 10;
 struct DBImpl::Writer {
   Status status;
   WriteBatch* batch;
-  bool sync;
-  bool done;
+  bool sync;          // op log是否立即写入磁盘
+  bool done;          // 标记写入是否完成
   port::CondVar cv;
 
   explicit Writer(port::Mutex* mu) : cv(mu) { }
@@ -1220,9 +1220,9 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && my_batch != nullptr) {  // nullptr batch is for compactions
-    WriteBatch* updates = BuildBatchGroup(&last_writer);
+    WriteBatch* updates = BuildBatchGroup(&last_writer);  // 合并写操作
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
-    last_sequence += WriteBatchInternal::Count(updates);
+    last_sequence += WriteBatchInternal::Count(updates);  // 合并write，版本号向前跳
 
     // Add to log and apply to memtable.  We can release the lock
     // during this phase since &w is currently responsible for logging
@@ -1230,7 +1230,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(updates));
+      status = log_->AddRecord(WriteBatchInternal::Contents(updates));  // 写入log
       bool sync_error = false;
       if (status.ok() && options.sync) {
         status = logfile_->Sync();
@@ -1239,7 +1239,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
         }
       }
       if (status.ok()) {
-        status = WriteBatchInternal::InsertInto(updates, mem_);
+        status = WriteBatchInternal::InsertInto(updates, mem_); // 写内存
       }
       mutex_.Lock();
       if (sync_error) {
@@ -1275,6 +1275,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
 // REQUIRES: Writer list must be non-empty
 // REQUIRES: First writer must have a non-null batch
+// 把writers_队列中的Writer合并到一个WriteBatch中，并返回这个WriteBatch
 WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   mutex_.AssertHeld();
   assert(!writers_.empty());

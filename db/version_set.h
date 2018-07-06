@@ -55,6 +55,7 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
+// 一个版本信息主要维护了每一层所有文件的元数据
 class Version {
  public:
   // Append to *iters a sequence of iterators that will

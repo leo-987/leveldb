@@ -54,7 +54,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
   int found = 0;
   while (!input.empty()) {
     found++;
-    char tag = input[0];
+    char tag = input[0];    // type字段
     input.remove_prefix(1);
     switch (tag) {
       case kTypeValue:
@@ -83,14 +83,17 @@ Status WriteBatch::Iterate(Handler* handler) const {
   }
 }
 
+// 获取WriteBatch的操作记录条数
 int WriteBatchInternal::Count(const WriteBatch* b) {
   return DecodeFixed32(b->rep_.data() + 8);
 }
 
+// 设置WriteBatch的操作记录条数
 void WriteBatchInternal::SetCount(WriteBatch* b, int n) {
   EncodeFixed32(&b->rep_[8], n);
 }
 
+// 返回WriteBatch->rep_开头64bit，也就是sequece字段值
 SequenceNumber WriteBatchInternal::Sequence(const WriteBatch* b) {
   return SequenceNumber(DecodeFixed64(b->rep_.data()));
 }
@@ -113,10 +116,11 @@ void WriteBatch::Delete(const Slice& key) {
 }
 
 namespace {
+// MemTable插入器，负责mem_的插入删除操作，接口使用前需要设置好sequence_和mem_
 class MemTableInserter : public WriteBatch::Handler {
  public:
-  SequenceNumber sequence_;
-  MemTable* mem_;
+  SequenceNumber sequence_; // 操作对应的sequece
+  MemTable* mem_;           // 指向需要操作的MemTable
 
   virtual void Put(const Slice& key, const Slice& value) {
     mem_->Add(sequence_, kTypeValue, key, value);
@@ -142,6 +146,8 @@ void WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
   b->rep_.assign(contents.data(), contents.size());
 }
 
+// 1. 更新dst的count成员
+// 2. 合并WriteBatch，src->rep_数据拷贝到dst->rep_
 void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src) {
   SetCount(dst, Count(dst) + Count(src));
   assert(src->rep_.size() >= kHeader);
