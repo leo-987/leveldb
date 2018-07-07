@@ -136,7 +136,7 @@ class DBImpl : public DB {
 
   // State below is protected by mutex_
   port::Mutex mutex_;
-  port::AtomicPointer shutting_down_;
+  port::AtomicPointer shutting_down_;  // DB是否被关闭
   port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_);
   MemTable* mem_;
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted

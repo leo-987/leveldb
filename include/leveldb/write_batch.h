@@ -66,6 +66,7 @@ class LEVELDB_EXPORT WriteBatch {
  private:
   friend class WriteBatchInternal;
 
+  // 一个WriteBatch内部包含一个sequence number和count
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
 };
 

@@ -102,6 +102,7 @@ void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
   EncodeFixed64(&b->rep_[0], seq);
 }
 
+// 设置count，type，key(+length)，value(+length)到rep_
 void WriteBatch::Put(const Slice& key, const Slice& value) {
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeValue));
@@ -147,7 +148,7 @@ void WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
 }
 
 // 1. 更新dst的count成员
-// 2. 合并WriteBatch，src->rep_数据拷贝到dst->rep_
+// 2. 合并WriteBatch，src->rep_数据拷贝到dst->rep_，不包含src的sequence number和count
 void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src) {
   SetCount(dst, Count(dst) + Count(src));
   assert(src->rep_.size() >= kHeader);

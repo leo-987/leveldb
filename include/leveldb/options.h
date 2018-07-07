@@ -81,7 +81,7 @@ struct LEVELDB_EXPORT Options {
   // the next time the database is opened.
   //
   // Default: 4MB
-  size_t write_buffer_size;
+  size_t write_buffer_size; // memtable进行compact的阈值
 
   // Number of open files that can be used by the DB.  You may need to
   // increase this if your database has a large working set (budget

@@ -28,6 +28,7 @@ MemTable::~MemTable() {
   assert(refs_ == 0);
 }
 
+// 返回内存池使用字节数
 size_t MemTable::ApproximateMemoryUsage() { return arena_.MemoryUsage(); }
 
 int MemTable::KeyComparator::operator()(const char* aptr, const char* bptr)
@@ -125,7 +126,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     uint32_t key_length;
 
     // key_len(32bit) | user_key | sequence_number | type | value_len | value
-    //    ↑
+    // ↑
     // key_ptr
     const char* key_ptr = GetVarint32Ptr(entry, entry+5, &key_length);
 
@@ -137,6 +138,9 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
       const uint64_t tag = DecodeFixed64(key_ptr + key_length - 8);
       switch (static_cast<ValueType>(tag & 0xff)) {
         case kTypeValue: {
+          // key_len(32bit) | user_key | sequence_number | type | value_len | value
+          //                                                    ↑
+          //                                           (key_ptr + key_length)
           Slice v = GetLengthPrefixedSlice(key_ptr + key_length);
           value->assign(v.data(), v.size());
           return true;

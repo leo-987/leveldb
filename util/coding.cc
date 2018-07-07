@@ -44,11 +44,16 @@ void PutFixed64(std::string* dst, uint64_t value) {
   dst->append(buf, sizeof(buf));
 }
 
+// 将整数v转换成字符串形式存入dst
 // 返回的指针指向填充位置结束处
+// 采用小端字节序，低位字节排放在内存的低地址端，高位字节排放在内存的高地址端
+// 由于一个字符只用到7位，所以第八位用来标识后一个字节是否也是数字的一部分，防止和其它数据段搞混，例如
+// [10000001][00000001]
+// 解码时就知道这两个字节组成一个数字
 char* EncodeVarint32(char* dst, uint32_t v) {
   // Operate on characters as unsigneds
   unsigned char* ptr = reinterpret_cast<unsigned char*>(dst);
-  static const int B = 128;
+  static const int B = 128; // 1000 0000
   if (v < (1<<7)) {
     *(ptr++) = v;
   } else if (v < (1<<14)) {
@@ -73,6 +78,7 @@ char* EncodeVarint32(char* dst, uint32_t v) {
   return reinterpret_cast<char*>(ptr);
 }
 
+// 把v对应的字符串append到dst中
 void PutVarint32(std::string* dst, uint32_t v) {
   char buf[5];
   char* ptr = EncodeVarint32(buf, v);
@@ -96,6 +102,8 @@ void PutVarint64(std::string* dst, uint64_t v) {
   dst->append(buf, ptr - buf);
 }
 
+// dst <- value_size
+// dst <- value
 void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   PutVarint32(dst, value.size());
   dst->append(value.data(), value.size());

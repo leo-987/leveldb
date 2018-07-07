@@ -4,35 +4,17 @@
 
 #include "db/db_impl.h"
 
-#include <stdint.h>
-#include <stdio.h>
-
-#include <algorithm>
-#include <set>
-#include <string>
-#include <vector>
-
 #include "db/builder.h"
 #include "db/db_iter.h"
-#include "db/dbformat.h"
 #include "db/filename.h"
 #include "db/log_reader.h"
-#include "db/log_writer.h"
 #include "db/memtable.h"
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
-#include "leveldb/db.h"
-#include "leveldb/env.h"
-#include "leveldb/status.h"
-#include "leveldb/table.h"
-#include "leveldb/table_builder.h"
-#include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
 #include "table/two_level_iterator.h"
-#include "util/coding.h"
-#include "util/logging.h"
 #include "util/mutexlock.h"
 
 namespace leveldb {
@@ -662,7 +644,7 @@ void DBImpl::MaybeScheduleCompaction() {
     // No work to be done
   } else {
     background_compaction_scheduled_ = true;
-    env_->Schedule(&DBImpl::BGWork, this);
+    env_->Schedule(&DBImpl::BGWork, this);  // 生成后台线程并调度运行函数BGWork
   }
 }
 
@@ -678,7 +660,7 @@ void DBImpl::BackgroundCall() {
   } else if (!bg_error_.ok()) {
     // No more background work after a background error.
   } else {
-    BackgroundCompaction();
+    BackgroundCompaction(); // compact核心函数
   }
 
   background_compaction_scheduled_ = false;
@@ -686,13 +668,15 @@ void DBImpl::BackgroundCall() {
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
   MaybeScheduleCompaction();
-  background_work_finished_signal_.SignalAll();
+  background_work_finished_signal_.SignalAll(); // 通知等待中的其它用户线程
 }
 
+// 1. 将imm_数据写入sstable
+// 2. 各个level之间的数据进行合并
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
-  if (imm_ != nullptr) {
+  if (imm_ != nullptr) {  // 只要imm_有数据，就一直将imm_的数据写入sstable
     CompactMemTable();
     return;
   }
@@ -1201,6 +1185,8 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);
 }
 
+// 将my_batch封装的数据写入memtable和bin log中
+// 如果队列中还有其它Writer需要写入，则合并执行
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   Writer w(&mutex_);
   w.batch = my_batch;
@@ -1217,11 +1203,11 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   }
 
   // May temporarily unlock and wait.
-  Status status = MakeRoomForWrite(my_batch == nullptr);
+  Status status = MakeRoomForWrite(my_batch == nullptr);  // 这个函数返回就表示mem_有足够的空间写入了
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && my_batch != nullptr) {  // nullptr batch is for compactions
-    WriteBatch* updates = BuildBatchGroup(&last_writer);  // 合并写操作
+    WriteBatch* updates = BuildBatchGroup(&last_writer);  // 合并写操作，返回后last_writer会指向队列中最后一个Writer
     WriteBatchInternal::SetSequence(updates, last_sequence + 1);
     last_sequence += WriteBatchInternal::Count(updates);  // 合并write，版本号向前跳
 
@@ -1333,8 +1319,8 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   assert(!writers_.empty());
   bool allow_delay = !force;
   Status s;
-  while (true) {
-    if (!bg_error_.ok()) {
+  while (true) {  // 这个循环会一直执行，直到memtable有足够的空间，或者后台线程出错
+    if (!bg_error_.ok()) {  // 后台线程执行有错误，直接返回
       // Yield previous error
       s = bg_error_;
       break;
@@ -1347,6 +1333,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // individual write by 1ms to reduce latency variance.  Also,
       // this delay hands over some CPU to the compaction thread in
       // case it is sharing the same core as the writer.
+      // level 0文件数过多，需要后台线程合并，因此当前写操作需要等待一会
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
@@ -1358,14 +1345,18 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (imm_ != nullptr) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
+      // 等待imm_数据写入磁盘
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
+      // 等待level 0 sstable合并
       Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
+      // mem_变成imm_，然后后台线程将imm_写入磁盘文件
+      // 重新分配一个MemTable用于更新操作
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
@@ -1385,7 +1376,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       mem_ = new MemTable(internal_comparator_);
       mem_->Ref();
       force = false;   // Do not force another compaction if have room
-      MaybeScheduleCompaction();
+      MaybeScheduleCompaction();  // 启动后台线程将imm_写入磁盘
     }
   }
   return s;
@@ -1488,7 +1479,7 @@ void DBImpl::GetApproximateSizes(
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
-  batch.Put(key, value);
+  batch.Put(key, value);  // 给WriteBatch设置count、key、value，sequence number在下一步设置
   return Write(opt, &batch);
 }
 
