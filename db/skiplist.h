@@ -223,7 +223,7 @@ inline void SkipList<Key,Comparator>::Iterator::Prev() {
 
 template<typename Key, class Comparator>
 inline void SkipList<Key,Comparator>::Iterator::Seek(const Key& target) {
-  node_ = list_->FindGreaterOrEqual(target, nullptr);
+  node_ = list_->FindGreaterOrEqual(target, nullptr); // for seek
 }
 
 template<typename Key, class Comparator>
@@ -258,6 +258,7 @@ bool SkipList<Key,Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
   return (n != nullptr) && (compare_(n->key, key) < 0);   // 比较算子见comparator.cc
 }
 
+// 查找并返回大于等于key的最近节点，并保存key的所有前驱节点
 template<typename Key, class Comparator>
 typename SkipList<Key,Comparator>::Node* SkipList<Key,Comparator>::FindGreaterOrEqual(const Key& key, Node** prev)
     const {
@@ -339,7 +340,7 @@ void SkipList<Key,Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   Node* prev[kMaxHeight];
-  Node* x = FindGreaterOrEqual(key, prev);  // 返回跳表中大于等于key的节点，并保存所有前驱指针
+  Node* x = FindGreaterOrEqual(key, prev);  // for Insert
 
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));

@@ -106,11 +106,12 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   table_.Insert(buf); // 编码好的kv对插入跳表
 }
 
+// 在跳表中查找key对应的value
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
-  Slice memkey = key.memtable_key();
+  Slice memkey = key.memtable_key();  // 把LookupKey转化成Slice
   Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());
-  if (iter.Valid()) {
+  iter.Seek(memkey.data());           // for Get，查找结果保存在iter.node_
+  if (iter.Valid()) {                 // 是否找到对应node
     // entry format is:
     //    klength  varint32
     //    userkey  char[klength]
@@ -122,7 +123,13 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     // all entries with overly large sequence numbers.
     const char* entry = iter.key();
     uint32_t key_length;
+
+    // key_len(32bit) | user_key | sequence_number | type | value_len | value
+    //    ↑
+    // key_ptr
     const char* key_ptr = GetVarint32Ptr(entry, entry+5, &key_length);
+
+    // 对比key，实际是两个Slice的对比
     if (comparator_.comparator.user_comparator()->Compare(
             Slice(key_ptr, key_length - 8),
             key.user_key()) == 0) {
@@ -135,7 +142,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
           return true;
         }
         case kTypeDeletion:
-          *s = Status::NotFound(Slice());
+          *s = Status::NotFound(Slice()); // 记录被删除了，返回404
           return true;
       }
     }

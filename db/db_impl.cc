@@ -1114,12 +1114,13 @@ int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
   return versions_->MaxNextLevelOverlappingBytes();
 }
 
+// 输入key，输出value
 Status DBImpl::Get(const ReadOptions& options,
                    const Slice& key,
                    std::string* value) {
   Status s;
   MutexLock l(&mutex_);
-  SequenceNumber snapshot;
+  SequenceNumber snapshot;  // 此次GET的sequence number
   if (options.snapshot != nullptr) {
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();

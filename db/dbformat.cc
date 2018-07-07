@@ -118,22 +118,23 @@ bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
   return user_policy_->KeyMayMatch(ExtractUserKey(key), f);
 }
 
-// 用user_key和s构成internalKey
+// 用user_key和s构成LookupKey
+// 主要包括(size, user_key, sequence number, type)
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();
   size_t needed = usize + 13;  // A conservative estimate
   char* dst;
   if (needed <= sizeof(space_)) {
-    dst = space_;
+    dst = space_;   // key长度小于200，直接利用现有buffer
   } else {
-    dst = new char[needed];
+    dst = new char[needed]; // key长度大于200，重新分配buffer
   }
   start_ = dst;
-  dst = EncodeVarint32(dst, usize + 8); // user key + sequence number + type
+  dst = EncodeVarint32(dst, usize + 8); // 填充internalKey长度，internalKey = user key + sequence number + type
   kstart_ = dst;
-  memcpy(dst, user_key.data(), usize);
+  memcpy(dst, user_key.data(), usize);  // 填充user key
   dst += usize;
-  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));
+  EncodeFixed64(dst, PackSequenceAndType(s, kValueTypeForSeek));  // 填充type
   dst += 8;
   end_ = dst;
 }
