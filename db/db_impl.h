@@ -120,13 +120,13 @@ class DBImpl : public DB {
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Constant after construction
-  Env* const env_;
+  Env* const env_;         // 依赖于os的系统接口封装
   const InternalKeyComparator internal_comparator_;
   const InternalFilterPolicy internal_filter_policy_;
   const Options options_;  // options_.comparator == &internal_comparator_
   const bool owns_info_log_;
   const bool owns_cache_;
-  const std::string dbname_;
+  const std::string dbname_;    // DB名称，由用户open时传入
 
   // table_cache_ provides its own synchronization
   TableCache* const table_cache_;
@@ -141,9 +141,9 @@ class DBImpl : public DB {
   MemTable* mem_;
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
   port::AtomicPointer has_imm_;       // So bg thread can detect non-null imm_
-  WritableFile* logfile_;
-  uint64_t logfile_number_ GUARDED_BY(mutex_);
-  log::Writer* log_;
+  WritableFile* logfile_;             // 当前log的WritableFile对象
+  uint64_t logfile_number_ GUARDED_BY(mutex_);  // log文件名中的序号部分
+  log::Writer* log_;                  // 负责写log的对象
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
   // Queue of writers.

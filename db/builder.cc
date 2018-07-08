@@ -22,7 +22,7 @@ Status BuildTable(const std::string& dbname,
                   FileMetaData* meta) {
   Status s;
   meta->file_size = 0;
-  iter->SeekToFirst();
+  iter->SeekToFirst();  // iter类型为MemTableIterator
 
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {

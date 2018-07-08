@@ -24,11 +24,15 @@ static std::string MakeFileName(const std::string& dbname, uint64_t number,
   return dbname + buf;
 }
 
+// 返回一个拼接好的log文件名
+// log名 = dbname + number + .log
 std::string LogFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "log");
 }
 
+// 返回一个拼接好的ldb文件名
+// log名 = dbname + number + .ldb
 std::string TableFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "ldb");

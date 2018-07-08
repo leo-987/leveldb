@@ -33,7 +33,7 @@ class Writer {
   Status AddRecord(const Slice& slice);
 
  private:
-  WritableFile* dest_;
+  WritableFile* dest_;     // WritableFile内部是对特定os文件系统接口的封装
   int block_offset_;       // Current offset in block
 
   // crc32c values for all supported record types.  These are

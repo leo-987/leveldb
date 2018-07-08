@@ -51,6 +51,7 @@ static const char* EncodeKey(std::string* scratch, const Slice& target) {
 
 class MemTableIterator: public Iterator {
  public:
+  // table保存在iter_中
   explicit MemTableIterator(MemTable::Table* table) : iter_(table) { }
 
   virtual bool Valid() const { return iter_.Valid(); }
