@@ -24,8 +24,8 @@ struct TableBuilder::Rep {
   uint64_t offset;
   Status status;
   BlockBuilder data_block;
-  BlockBuilder index_block;
-  std::string last_key;
+  BlockBuilder index_block; // index block中的每条entry用来存储一个data block的索引信息
+  std::string last_key;     // sstable中最大的key
   int64_t num_entries;
   bool closed;          // Either Finish() or Abandon() has been called.
   FilterBlockBuilder* filter_block;
@@ -39,6 +39,7 @@ struct TableBuilder::Rep {
   // blocks.
   //
   // Invariant: r->pending_index_entry is true only if data_block is empty.
+  // 一条index block中的entry记录一个data block，因此遇到新data block才能确定上一个data block的index信息，这个变量才为true
   bool pending_index_entry;
   BlockHandle pending_handle;  // Handle to add to index block
 
@@ -101,8 +102,8 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     assert(r->data_block.empty());
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
-    r->pending_handle.EncodeTo(&handle_encoding);
-    r->index_block.Add(r->last_key, Slice(handle_encoding));
+    r->pending_handle.EncodeTo(&handle_encoding);             // index block包含对应data block的最大key、在sstable中的offset、和大小
+    r->index_block.Add(r->last_key, Slice(handle_encoding));  // for index block
     r->pending_index_entry = false;
   }
 

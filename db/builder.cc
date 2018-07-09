@@ -35,7 +35,7 @@ Status BuildTable(const std::string& dbname,
     TableBuilder* builder = new TableBuilder(options, file);
     meta->smallest.DecodeFrom(iter->key());
 
-    // 将memtable中的数据循环读入TableBuilder
+    // 将memtable中的数据循环读入TableBuilder，由于memtable有序，因此sstable也是按key从小到大顺序写入的
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);

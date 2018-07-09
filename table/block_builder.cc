@@ -79,13 +79,14 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   size_t shared = 0;
   if (counter_ < options_->block_restart_interval) {
     // See how much sharing to do with previous string
+    // 检查block中最后一个entry的key和当前要插入的key，开头有多少个字符是相同的
     const size_t min_length = std::min(last_key_piece.size(), key.size());
     while ((shared < min_length) && (last_key_piece[shared] == key[shared])) {
       shared++;
     }
   } else {
     // Restart compression
-    restarts_.push_back(buffer_.size());
+    restarts_.push_back(buffer_.size());  // 记录下一个restart point的偏移量
     counter_ = 0;
   }
   const size_t non_shared = key.size() - shared;  // key非共享部分长度
@@ -96,10 +97,11 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   PutVarint32(&buffer_, value.size());
 
   // Add string delta to buffer_ followed by value
-  buffer_.append(key.data() + shared, non_shared);  // 只存储非共享部分的key
+  buffer_.append(key.data() + shared, non_shared);  // 如果不是restart point，只存储非共享部分的key
   buffer_.append(value.data(), value.size());
 
   // Update state
+  // 更新block的last key
   last_key_.resize(shared);
   last_key_.append(key.data() + shared, non_shared);
   assert(Slice(last_key_) == key);
