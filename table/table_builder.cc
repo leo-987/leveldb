@@ -24,7 +24,9 @@ struct TableBuilder::Rep {
   uint64_t offset;
   Status status;
   BlockBuilder data_block;
-  BlockBuilder index_block; // index block中的每条entry用来存储一个data block的索引信息
+
+  // index block中的每条entry用来存储一个data block的索引信息，包括data block的最大key、在sstable中的offset、和大小
+  BlockBuilder index_block;
   std::string last_key;     // sstable中最大的key
   int64_t num_entries;
   bool closed;          // Either Finish() or Abandon() has been called.
@@ -98,12 +100,12 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     assert(r->options.comparator->Compare(key, Slice(r->last_key)) > 0);
   }
 
-  if (r->pending_index_entry) {
+  if (r->pending_index_entry) { // 只有当data block为空时，才记录上一个data block的索引信息
     assert(r->data_block.empty());
-    r->options.comparator->FindShortestSeparator(&r->last_key, key);
+    r->options.comparator->FindShortestSeparator(&r->last_key, key);    // 这一行的目的参考本文件开头的英文注释
     std::string handle_encoding;
-    r->pending_handle.EncodeTo(&handle_encoding);             // index block包含对应data block的最大key、在sstable中的offset、和大小
-    r->index_block.Add(r->last_key, Slice(handle_encoding));  // for index block
+    r->pending_handle.EncodeTo(&handle_encoding);             // index block包含
+    r->index_block.Add(r->last_key, Slice(handle_encoding));  // for index block，它也是以kv的形式存放的
     r->pending_index_entry = false;
   }
 
@@ -113,7 +115,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
 
   r->last_key.assign(key.data(), key.size());
   r->num_entries++;
-  r->data_block.Add(key, value);
+  r->data_block.Add(key, value);  // for data block
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
   if (estimated_block_size >= r->options.block_size) {
@@ -127,7 +129,7 @@ void TableBuilder::Flush() {
   if (!ok()) return;
   if (r->data_block.empty()) return;
   assert(!r->pending_index_entry);
-  WriteBlock(&r->data_block, &r->pending_handle);
+  WriteBlock(&r->data_block, &r->pending_handle); // for data block
   if (ok()) {
     r->pending_index_entry = true;
     r->status = r->file->Flush();
@@ -144,7 +146,7 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   //    crc: uint32
   assert(ok());
   Rep* r = rep_;
-  Slice raw = block->Finish();
+  Slice raw = block->Finish();  // data block第一部分
 
   Slice block_contents;
   CompressionType type = r->options.compression;
@@ -168,11 +170,12 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
       break;
     }
   }
-  WriteRawBlock(block_contents, type, handle);
+  WriteRawBlock(block_contents, type, handle);  // data block三个部分一起写入sstable文件中
   r->compressed_output.clear();
-  block->Reset();
+  block->Reset(); // 将写完的block清空
 }
 
+// 把data block，type，crc写入sstable文件中
 void TableBuilder::WriteRawBlock(const Slice& block_contents,
                                  CompressionType type,
                                  BlockHandle* handle) {
