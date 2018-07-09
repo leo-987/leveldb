@@ -676,8 +676,8 @@ void DBImpl::BackgroundCall() {
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
-  if (imm_ != nullptr) {  // 只要imm_有数据，就一直将imm_的数据写入sstable
-    CompactMemTable();
+  if (imm_ != nullptr) {
+    CompactMemTable();  // 只要imm_有数据，就一直将imm_的数据写入sstable
     return;
   }
 

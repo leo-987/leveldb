@@ -45,7 +45,7 @@ class BlockBuilder {
   std::vector<uint32_t> restarts_;    // Restart points
   int                   counter_;     // Number of entries emitted since restart
   bool                  finished_;    // Has Finish() been called?
-  std::string           last_key_;
+  std::string           last_key_;    // block中的最后一个key
 
   // No copying allowed
   BlockBuilder(const BlockBuilder&);
