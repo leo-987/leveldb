@@ -129,7 +129,7 @@ class DBImpl : public DB {
   const std::string dbname_;    // DB名称，由用户open时传入
 
   // table_cache_ provides its own synchronization
-  TableCache* const table_cache_;
+  TableCache* const table_cache_;   // 所有打开的sstable文件在内存中的缓存
 
   // Lock over the persistent DB state.  Non-null iff successfully acquired.
   FileLock* db_lock_;

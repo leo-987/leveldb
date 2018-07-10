@@ -137,6 +137,7 @@ class PosixSequentialFile: public SequentialFile {
 };
 
 // pread() based random-access
+// 依靠pread实现随机读
 class PosixRandomAccessFile: public RandomAccessFile {
  private:
   std::string filename_;
@@ -188,6 +189,7 @@ class PosixRandomAccessFile: public RandomAccessFile {
 };
 
 // mmap() based random-access
+// 依靠内存映射实现随机读
 class PosixMmapReadableFile: public RandomAccessFile {
  private:
   std::string filename_;
@@ -410,6 +412,7 @@ class PosixEnv : public Env {
     }
   }
 
+  // 打开fname文件并创建一个PosixMmapReadableFile对象或PosixRandomAccessFile对象
   virtual Status NewRandomAccessFile(const std::string& fname,
                                      RandomAccessFile** result) {
     *result = nullptr;

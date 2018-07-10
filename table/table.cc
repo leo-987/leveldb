@@ -35,6 +35,7 @@ struct Table::Rep {
   Block* index_block;
 };
 
+// 根据参数file，读取sstable文件的footer和index block，并保存在返回的table中
 Status Table::Open(const Options& options,
                    RandomAccessFile* file,
                    uint64_t size,
@@ -77,12 +78,13 @@ Status Table::Open(const Options& options,
     rep->filter_data = nullptr;
     rep->filter = nullptr;
     *table = new Table(rep);
-    (*table)->ReadMeta(footer);
+    (*table)->ReadMeta(footer); // 读取filter block
   }
 
   return s;
 }
 
+// 如果有必要，读取filter block信息
 void Table::ReadMeta(const Footer& footer) {
   if (rep_->options.filter_policy == nullptr) {
     return;  // Do not need any metadata

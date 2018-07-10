@@ -67,6 +67,7 @@ struct LRUHandle {
 // table implementations in some of the compiler/runtime combinations
 // we have tested.  E.g., readrandom speeds up by ~5% over the g++
 // 4.4.3's builtin hashtable.
+// 这是个哈希表
 class HandleTable {
  public:
   HandleTable() : length_(0), elems_(0), list_(nullptr) { Resize(); }
@@ -193,7 +194,7 @@ class LRUCache {
   // Entries are in use by clients, and have refs >= 2 and in_cache==true.
   LRUHandle in_use_ GUARDED_BY(mutex_);
 
-  HandleTable table_ GUARDED_BY(mutex_);
+  HandleTable table_ GUARDED_BY(mutex_);  // 哈希表
 };
 
 LRUCache::LRUCache()
@@ -306,6 +307,7 @@ Cache::Handle* LRUCache::Insert(
 
 // If e != nullptr, finish removing *e from the cache; it has already been
 // removed from the hash table.  Return whether e != nullptr.
+// 从LRU链表中删除节点e
 bool LRUCache::FinishErase(LRUHandle* e) {
   if (e != nullptr) {
     assert(e->in_cache);
