@@ -21,7 +21,7 @@ struct TableBuilder::Rep {
   Options options;
   Options index_block_options;
   WritableFile* file;
-  uint64_t offset;
+  uint64_t offset;    // sstable文件偏移量
   Status status;
   BlockBuilder data_block;
 
@@ -92,6 +92,8 @@ Status TableBuilder::ChangeOptions(const Options& options) {
   return Status::OK();
 }
 
+// 将key、value写入data block，如果是个新的data block，则要把上一个data block的索引信息写入index block
+// 如果data block写满4KB，则将这个data block刷到磁盘
 void TableBuilder::Add(const Slice& key, const Slice& value) {
   Rep* r = rep_;
   assert(!r->closed);
@@ -119,10 +121,11 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
 
   const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
   if (estimated_block_size >= r->options.block_size) {
-    Flush();
+    Flush();  // 一个data block大于4KB，则写入磁盘
   }
 }
 
+// 将data block刷到磁盘sstable
 void TableBuilder::Flush() {
   Rep* r = rep_;
   assert(!r->closed);
@@ -131,7 +134,7 @@ void TableBuilder::Flush() {
   assert(!r->pending_index_entry);
   WriteBlock(&r->data_block, &r->pending_handle); // for data block
   if (ok()) {
-    r->pending_index_entry = true;
+    r->pending_index_entry = true;  // 写完一个data block，需要在后面跟一个index block
     r->status = r->file->Flush();
   }
   if (r->filter_block != nullptr) {
@@ -139,6 +142,7 @@ void TableBuilder::Flush() {
   }
 }
 
+// 参数block可能是：1)data block, 2)index block, 3)meta index block
 void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]
@@ -146,7 +150,7 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   //    crc: uint32
   assert(ok());
   Rep* r = rep_;
-  Slice raw = block->Finish();  // data block第一部分
+  Slice raw = block->Finish();  // block第一部分
 
   Slice block_contents;
   CompressionType type = r->options.compression;
@@ -170,26 +174,26 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
       break;
     }
   }
-  WriteRawBlock(block_contents, type, handle);  // data block三个部分一起写入sstable文件中
+  WriteRawBlock(block_contents, type, handle);  // block三个部分一起写入sstable文件中
   r->compressed_output.clear();
   block->Reset(); // 将写完的block清空
 }
 
-// 把data block，type，crc写入sstable文件中
+// 把一个完整的block（包括数据，type，crc）写入sstable文件中
 void TableBuilder::WriteRawBlock(const Slice& block_contents,
                                  CompressionType type,
                                  BlockHandle* handle) {
   Rep* r = rep_;
   handle->set_offset(r->offset);
   handle->set_size(block_contents.size());
-  r->status = r->file->Append(block_contents);
+  r->status = r->file->Append(block_contents);  // 写入数据部分
   if (r->status.ok()) {
     char trailer[kBlockTrailerSize];
     trailer[0] = type;
     uint32_t crc = crc32c::Value(block_contents.data(), block_contents.size());
     crc = crc32c::Extend(crc, trailer, 1);  // Extend crc to cover block type
     EncodeFixed32(trailer+1, crc32c::Mask(crc));
-    r->status = r->file->Append(Slice(trailer, kBlockTrailerSize));
+    r->status = r->file->Append(Slice(trailer, kBlockTrailerSize)); // 写入type和crc
     if (r->status.ok()) {
       r->offset += block_contents.size() + kBlockTrailerSize;
     }
@@ -202,7 +206,7 @@ Status TableBuilder::status() const {
 
 Status TableBuilder::Finish() {
   Rep* r = rep_;
-  Flush();
+  Flush();  // data block可能还没有刷到磁盘，所以这里要强制写一次
   assert(!r->closed);
   r->closed = true;
 
@@ -239,16 +243,20 @@ Status TableBuilder::Finish() {
       r->index_block.Add(r->last_key, Slice(handle_encoding));
       r->pending_index_entry = false;
     }
-    WriteBlock(&r->index_block, &index_block_handle);
+    WriteBlock(&r->index_block, &index_block_handle); // index_block_handle会返回index block在sstable文件中的偏移量和大小
   }
 
   // Write footer
+  // Footer格式，Footer不是block，所以没有type和crc字段
+  // +-------------------+-----------------+--------------+------------+-------+
+  // | meta index offset | meta index size | index offset | index size | magic |
+  // +-------------------+-----------------+--------------+------------+-------+
   if (ok()) {
     Footer footer;
-    footer.set_metaindex_handle(metaindex_block_handle);
-    footer.set_index_handle(index_block_handle);
+    footer.set_metaindex_handle(metaindex_block_handle);  // meta index block offset/size
+    footer.set_index_handle(index_block_handle);          // index block offset/size
     std::string footer_encoding;
-    footer.EncodeTo(&footer_encoding);
+    footer.EncodeTo(&footer_encoding);                    // magic number
     r->status = r->file->Append(footer_encoding);
     if (r->status.ok()) {
       r->offset += footer_encoding.size();

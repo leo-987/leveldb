@@ -64,6 +64,7 @@ size_t BlockBuilder::CurrentSizeEstimate() const {
 // +-------+-------+-----+---------+---------+-----+----------------+
 // | entry | entry | ... | restart | restart | ... | restart length |
 // +-------+-------+-----+---------+---------+-----+----------------+
+// 返回data block数据
 Slice BlockBuilder::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {

@@ -14,6 +14,7 @@
 
 namespace leveldb {
 
+// 将immutable memtable一次性dump到sstable文件中
 Status BuildTable(const std::string& dbname,
                   Env* env,
                   const Options& options,
@@ -27,7 +28,7 @@ Status BuildTable(const std::string& dbname,
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
     WritableFile* file;
-    s = env->NewWritableFile(fname, &file);
+    s = env->NewWritableFile(fname, &file); // open一个名为fname的文件
     if (!s.ok()) {
       return s;
     }
@@ -52,7 +53,7 @@ Status BuildTable(const std::string& dbname,
 
     // Finish and check for file errors
     if (s.ok()) {
-      s = file->Sync();
+      s = file->Sync(); // 调用fdatasync同步数据到磁盘中
     }
     if (s.ok()) {
       s = file->Close();

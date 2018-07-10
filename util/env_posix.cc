@@ -221,6 +221,7 @@ class PosixMmapReadableFile: public RandomAccessFile {
   }
 };
 
+// 这个类对写入磁盘文件的数据做了一下合并，append的数据先放暂存到内部buffer中，防止频繁write
 class PosixWritableFile : public WritableFile {
  private:
   // buf_[0, pos_-1] contains data to be written to fd_.
@@ -240,6 +241,9 @@ class PosixWritableFile : public WritableFile {
     }
   }
 
+  // 1. 将data封装的数据append到buf_末尾
+  // 2. 如果能够放得下，则返回；否则将buf_数据写到文件中
+  // 3. 剩余数据如果能够全部放到空buf_中，则拷贝过去；否则直接将剩余数据写到文件中
   virtual Status Append(const Slice& data) {
     size_t n = data.size();
     const char* p = data.data();
@@ -283,6 +287,7 @@ class PosixWritableFile : public WritableFile {
     return FlushBuffered();
   }
 
+  // 如果是写MANIFEST文件，则将包含该文件的目录信息同步到磁盘
   Status SyncDirIfManifest() {
     const char* f = filename_.c_str();
     const char* sep = strrchr(f, '/');
@@ -318,7 +323,7 @@ class PosixWritableFile : public WritableFile {
     }
     s = FlushBuffered();
     if (s.ok()) {
-      if (fdatasync(fd_) != 0) {
+      if (fdatasync(fd_) != 0) {  // 只同步文件数据信息到磁盘，而没有同步文件元信息
         s = PosixError(filename_, errno);
       }
     }
@@ -326,6 +331,7 @@ class PosixWritableFile : public WritableFile {
   }
 
  private:
+  // 将buf_数据write到fd中
   Status FlushBuffered() {
     Status s = WriteRaw(buf_, pos_);
     pos_ = 0;
