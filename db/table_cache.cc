@@ -13,7 +13,7 @@ namespace leveldb {
 
 struct TableAndFile {
   RandomAccessFile* file;
-  Table* table;
+  Table* table; // 一个sstable的索引信息在内存中的映射
 };
 
 static void DeleteEntry(const Slice& key, void* value) {
@@ -42,18 +42,21 @@ TableCache::~TableCache() {
   delete cache_;
 }
 
+// 检查文件号为file_number的sstable是否在cache中，最终会从内部的一个哈希表中查找
+// 如果不在缓存中，则创建缓存节点，放入哈希表和LRU链表
+// 返回的handle实际上是一个LRUHandle类型的缓存node
 Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
   Status s;
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);
   Slice key(buf, sizeof(buf));
-  *handle = cache_->Lookup(key);
-  if (*handle == nullptr) { // cache中未缓存此文件
+  *handle = cache_->Lookup(key);  // key就是文件编号
+  if (*handle == nullptr) {       // cache中未缓存此文件
     std::string fname = TableFileName(dbname_, file_number);
     RandomAccessFile* file = nullptr;
     Table* table = nullptr;
-    s = env_->NewRandomAccessFile(fname, &file);
+    s = env_->NewRandomAccessFile(fname, &file);  // 根据文件名创建一个文件抽象
     if (!s.ok()) {
       std::string old_fname = SSTTableFileName(dbname_, file_number);
       if (env_->NewRandomAccessFile(old_fname, &file).ok()) {
@@ -61,7 +64,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       }
     }
     if (s.ok()) {
-      s = Table::Open(options_, file, file_size, &table); // 利用file读取文件数据
+      s = Table::Open(options_, file, file_size, &table); // 利用file读取相关block，填充到table
     }
 
     if (!s.ok()) {
@@ -73,7 +76,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       TableAndFile* tf = new TableAndFile;
       tf->file = file;
       tf->table = table;
-      *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
+      *handle = cache_->Insert(key, tf, 1, &DeleteEntry); // TableAndFile是作为LRU节点的value值
     }
   }
   return s;
@@ -88,7 +91,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
   }
 
   Cache::Handle* handle = nullptr;
-  Status s = FindTable(file_number, file_size, &handle);
+  Status s = FindTable(file_number, file_size, &handle);  // 根据sstable文件编号，直接返回或创建后返回一个缓存节点
   if (!s.ok()) {
     return NewErrorIterator(s);
   }

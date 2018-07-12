@@ -61,6 +61,7 @@ class LEVELDB_EXPORT Cache {
   // Else return a handle that corresponds to the mapping.  The caller
   // must call this->Release(handle) when the returned mapping is no
   // longer needed.
+  // 返回值Handle应该是一个LRU链表节点
   virtual Handle* Lookup(const Slice& key) = 0;
 
   // Release a mapping returned by a previous Lookup().

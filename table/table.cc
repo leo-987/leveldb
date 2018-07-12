@@ -35,7 +35,9 @@ struct Table::Rep {
   Block* index_block;
 };
 
-// 根据参数file，读取sstable文件的footer和index block，并保存在返回的table中
+// 根据参数file，读取footer（footer在sstable中的偏移量是确定的），
+// 然后根据footer中记录的index_block索引和meta_index_block索引，
+// 从sstable中读取index_block数据和filter_block数据（如果有必要的话），并保存在返回的table中
 Status Table::Open(const Options& options,
                    RandomAccessFile* file,
                    uint64_t size,
@@ -47,12 +49,12 @@ Status Table::Open(const Options& options,
 
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
-  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
+  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,  // 从sstable的footer偏移处读取footer数据
                         &footer_input, footer_space);
   if (!s.ok()) return s;
 
   Footer footer;
-  s = footer.DecodeFrom(&footer_input);
+  s = footer.DecodeFrom(&footer_input); // 解码footer信息
   if (!s.ok()) return s;
 
   // Read the index block
@@ -62,6 +64,7 @@ Status Table::Open(const Options& options,
     if (options.paranoid_checks) {
       opt.verify_checksums = true;
     }
+    // footer中包含meta_index_block和index_block在文件中的偏移和大小，从而可以读取出这两个block的内容
     s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
   }
 
@@ -78,7 +81,7 @@ Status Table::Open(const Options& options,
     rep->filter_data = nullptr;
     rep->filter = nullptr;
     *table = new Table(rep);
-    (*table)->ReadMeta(footer); // 读取filter block
+    (*table)->ReadMeta(footer); // 根据需要读取filter block
   }
 
   return s;

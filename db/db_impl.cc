@@ -505,7 +505,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
-      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
+      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key); // 为刚刚写入的sstable选择合适的level
     }
     edit->AddFile(level, meta.number, meta.file_size,
                   meta.smallest, meta.largest);

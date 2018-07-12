@@ -40,8 +40,9 @@ namespace {
 
 // An entry is a variable length heap-allocated structure.  Entries
 // are kept in a circular doubly linked list ordered by access time.
+// LRU链表节点
 struct LRUHandle {
-  void* value;
+  void* value;        // TableAndFile*
   void (*deleter)(const Slice&, void* value);
   LRUHandle* next_hash;
   LRUHandle* next;
@@ -73,10 +74,12 @@ class HandleTable {
   HandleTable() : length_(0), elems_(0), list_(nullptr) { Resize(); }
   ~HandleTable() { delete[] list_; }
 
+  // 哈希表查找
   LRUHandle* Lookup(const Slice& key, uint32_t hash) {
     return *FindPointer(key, hash);
   }
 
+  // 哈希表插入
   LRUHandle* Insert(LRUHandle* h) {
     LRUHandle** ptr = FindPointer(h->key(), h->hash);
     LRUHandle* old = *ptr;
@@ -108,7 +111,7 @@ class HandleTable {
   // a linked list of cache entries that hash into the bucket.
   uint32_t length_;
   uint32_t elems_;
-  LRUHandle** list_;
+  LRUHandle** list_;    // 哈希桶
 
   // Return a pointer to slot that points to a cache entry that
   // matches key/hash.  If there is no such cache entry, return a
@@ -259,7 +262,7 @@ Cache::Handle* LRUCache::Lookup(const Slice& key, uint32_t hash) {
   if (e != nullptr) {
     Ref(e);
   }
-  return reinterpret_cast<Cache::Handle*>(e);
+  return reinterpret_cast<Cache::Handle*>(e); // 为什么要这样转换？
 }
 
 void LRUCache::Release(Cache::Handle* handle) {
@@ -272,6 +275,7 @@ Cache::Handle* LRUCache::Insert(
     void (*deleter)(const Slice& key, void* value)) {
   MutexLock l(&mutex_);
 
+  // 创建一个node
   LRUHandle* e = reinterpret_cast<LRUHandle*>(
       malloc(sizeof(LRUHandle)-1 + key.size()));
   e->value = value;
@@ -380,7 +384,7 @@ class ShardedLRUCache : public Cache {
     shard_[Shard(hash)].Erase(key, hash);
   }
   virtual void* Value(Handle* handle) {
-    return reinterpret_cast<LRUHandle*>(handle)->value;
+    return reinterpret_cast<LRUHandle*>(handle)->value; // 返回哈希表节点的value字段
   }
   virtual uint64_t NewId() {
     MutexLock l(&id_mutex_);

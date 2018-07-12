@@ -15,6 +15,7 @@
 namespace leveldb {
 
 // 将immutable memtable一次性dump到sstable文件中
+// 然后将数据放到cache中
 Status BuildTable(const std::string& dbname,
                   Env* env,
                   const Options& options,

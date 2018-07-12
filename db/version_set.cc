@@ -118,6 +118,7 @@ static bool BeforeFile(const Comparator* ucmp,
           ucmp->Compare(*user_key, f->smallest.user_key()) < 0);
 }
 
+// 检查smallest_user_key和largest_user_key在files中是否有重叠
 bool SomeFileOverlapsRange(
     const InternalKeyComparator& icmp,
     bool disjoint_sorted_files,
@@ -127,6 +128,7 @@ bool SomeFileOverlapsRange(
   const Comparator* ucmp = icmp.user_comparator();
   if (!disjoint_sorted_files) {
     // Need to check against all files
+    // 如果是第0层，那么要遍历所有sstable文件检查key是否重叠
     for (size_t i = 0; i < files.size(); i++) {
       const FileMetaData* f = files[i];
       if (AfterFile(ucmp, smallest_user_key, f) ||
@@ -492,6 +494,8 @@ void Version::Unref() {
   }
 }
 
+// 检查smallest_user_key和largest_user_key在level层有没有重叠
+// 有重叠返回true，否则返回false
 bool Version::OverlapInLevel(int level,
                              const Slice* smallest_user_key,
                              const Slice* largest_user_key) {
@@ -499,6 +503,9 @@ bool Version::OverlapInLevel(int level,
                                smallest_user_key, largest_user_key);
 }
 
+// 根据最大key和最小key选择合适的level
+// 从第0层开始检查，如果没有和其它sstable文件重叠key，则可以把这个sstable移动到下一层
+// 最多下移两层
 int Version::PickLevelForMemTableOutput(
     const Slice& smallest_user_key,
     const Slice& largest_user_key) {
@@ -515,6 +522,7 @@ int Version::PickLevelForMemTableOutput(
       }
       if (level + 2 < config::kNumLevels) {
         // Check that file does not overlap too many grandparent bytes.
+        // 这里规定，如果要放到level层，那么level+2层不能和level层有太多的重叠
         GetOverlappingInputs(level + 2, &start, &limit, &overlaps);
         const int64_t sum = TotalFileSize(overlaps);
         if (sum > MaxGrandParentOverlapBytes(vset_->options_)) {
@@ -528,6 +536,7 @@ int Version::PickLevelForMemTableOutput(
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
+// 查看第level层有没有和begin、end重叠的文件，重叠的文件保存在inputs中
 void Version::GetOverlappingInputs(
     int level,
     const InternalKey* begin,
