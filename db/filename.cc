@@ -32,7 +32,7 @@ std::string LogFileName(const std::string& dbname, uint64_t number) {
 }
 
 // 返回一个拼接好的ldb文件名
-// log名 = dbname + number + .ldb
+// ldb名 = dbname + number + .ldb
 std::string TableFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "ldb");
@@ -44,6 +44,8 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+// 返回一个拼接好的MANIFEST文件名
+// MANIFEST名 = dbname/MANIFEST-number
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];

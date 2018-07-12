@@ -635,7 +635,7 @@ class VersionSet::Builder {
 
   VersionSet* vset_;
   Version* base_;
-  LevelState levels_[config::kNumLevels];
+  LevelState levels_[config::kNumLevels]; // 记录了每一层level有哪些文件添加和删除
 
  public:
   // Initialize a builder with the files from *base and other info from *vset
@@ -672,6 +672,7 @@ class VersionSet::Builder {
   }
 
   // Apply all of the edits in *edit to the current state.
+  // 把edit内包含的文件信息放到对应的level中
   void Apply(VersionEdit* edit) {
     // Update compaction pointers
     for (size_t i = 0; i < edit->compact_pointers_.size(); i++) {
@@ -692,6 +693,7 @@ class VersionSet::Builder {
 
     // Add new files
     for (size_t i = 0; i < edit->new_files_.size(); i++) {
+      // first记录了新文件要放到哪一层，second记录了这个文件的元数据
       const int level = edit->new_files_[i].first;
       FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
       f->refs = 1;
@@ -709,6 +711,7 @@ class VersionSet::Builder {
       // same as the compaction of 40KB of data.  We are a little
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
+      // 假设1次查询花费的时间和合并16KB花费的时间相同，则一个文件允许(file_size/16KB)次无效查询
       f->allowed_seeks = (f->file_size / 16384);
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
@@ -718,6 +721,7 @@ class VersionSet::Builder {
   }
 
   // Save the current state in *v.
+  // 将当前版本和新加入的文件合并放入参数v中，按从小到大顺序排列
   void SaveTo(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
@@ -729,6 +733,8 @@ class VersionSet::Builder {
       std::vector<FileMetaData*>::const_iterator base_end = base_files.end();
       const FileSet* added = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added->size());
+
+      // added_files中的文件应该是有序的
       for (FileSet::const_iterator added_iter = added->begin();
            added_iter != added->end();
            ++added_iter) {
@@ -766,6 +772,7 @@ class VersionSet::Builder {
     }
   }
 
+  // 将f放入到v->files_[level]数组中
   void MaybeAddFile(Version* v, int level, FileMetaData* f) {
     if (levels_[level].deleted_files.count(f->number) > 0) {
       // File is deleted: do nothing
@@ -773,6 +780,7 @@ class VersionSet::Builder {
       std::vector<FileMetaData*>* files = &v->files_[level];
       if (level > 0 && !files->empty()) {
         // Must not overlap
+        // v中已有的数据，key的范围不能和f的重合
         assert(vset_->icmp_.Compare((*files)[files->size()-1]->largest,
                                     f->smallest) < 0);
       }
@@ -810,6 +818,7 @@ VersionSet::~VersionSet() {
   delete descriptor_file_;
 }
 
+// 把v插入VersionSet的version链表中，并把当前version指向v
 void VersionSet::AppendVersion(Version* v) {
   // Make "v" current
   assert(v->refs_ == 0);
@@ -842,6 +851,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   edit->SetNextFile(next_file_number_);
   edit->SetLastSequence(last_sequence_);
 
+  // 将当前version和新的edit合并生成新version
   Version* v = new Version(this);
   {
     Builder builder(this, current_);
@@ -895,7 +905,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
-    AppendVersion(v);
+    AppendVersion(v);   // 把新version放入VersionSet中
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;
   } else {
@@ -1103,6 +1113,7 @@ void VersionSet::Finalize(Version* v) {
           static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
     }
 
+    // score越高，越有可能成为下一次compaction的对象
     if (score > best_score) {
       best_level = level;
       best_score = score;

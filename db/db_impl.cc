@@ -472,6 +472,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   return status;
 }
 
+// 1. 将Immutable Memtable所有数据写到一个sstable文件中
+// 2. 将新生成的sstale文件加入到合适的level中
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
@@ -486,7 +488,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta); // sstable元信息保存在meta中
     mutex_.Lock();
   }
 
@@ -526,7 +528,7 @@ void DBImpl::CompactMemTable() {
   VersionEdit edit;
   Version* base = versions_->current();
   base->Ref();
-  Status s = WriteLevel0Table(imm_, &edit, base);
+  Status s = WriteLevel0Table(imm_, &edit, base);   // for CompactMemTable
   base->Unref();
 
   if (s.ok() && shutting_down_.Acquire_Load()) {
@@ -537,7 +539,7 @@ void DBImpl::CompactMemTable() {
   if (s.ok()) {
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
-    s = versions_->LogAndApply(&edit, &mutex_);
+    s = versions_->LogAndApply(&edit, &mutex_); // 根据edit的变化生成新版本，由于是生成新的sstable文件，所以是edit->new_files_中有新数据
   }
 
   if (s.ok()) {

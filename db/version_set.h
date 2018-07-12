@@ -309,10 +309,11 @@ class VersionSet {
   WritableFile* descriptor_file_;
   log::Writer* descriptor_log_;
   Version dummy_versions_;  // Head of circular doubly-linked list of versions.
-  Version* current_;        // == dummy_versions_.prev_
+  Version* current_;        // == dummy_versions_.prev_，指向当前version
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
+  // compact_pointer_[1] = 3，表示level 1下一次compation应该从key=3的地方开始
   std::string compact_pointer_[config::kNumLevels];
 
   // No copying allowed
