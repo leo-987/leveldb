@@ -300,15 +300,15 @@ class VersionSet {
   TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
-  uint64_t manifest_file_number_;
+  uint64_t manifest_file_number_; // 当前manifest文件序号
   uint64_t last_sequence_;
-  uint64_t log_number_;
+  uint64_t log_number_;       // 当前bin log文件序号
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
 
   // Opened lazily
   WritableFile* descriptor_file_;
   log::Writer* descriptor_log_;   // manifest文件，每次启动leveldb都会创建一个新的manifest文件
-  Version dummy_versions_;  // Head of circular doubly-linked list of versions.
+  Version dummy_versions_;  // Head of circular doubly-linked list of versions. version链表开头
   Version* current_;        // == dummy_versions_.prev_，指向当前version
 
   // Per-level key at which the next compaction at that level should start.

@@ -121,7 +121,7 @@ Status TableCache::Get(const ReadOptions& options,
   return s;
 }
 
-// 根据file_number清楚文件缓存
+// 根据file_number清除文件缓存
 void TableCache::Evict(uint64_t file_number) {
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);

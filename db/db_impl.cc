@@ -200,6 +200,7 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
   }
 }
 
+// 不同类型的文件选择不同的删除策略
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -228,7 +229,7 @@ void DBImpl::DeleteObsoleteFiles() {
         case kDescriptorFile:
           // Keep my manifest file, and any newer incarnations'
           // (in case there is a race that allows other incarnations)
-          keep = (number >= versions_->ManifestFileNumber());
+          keep = (number >= versions_->ManifestFileNumber()); // 只保留新的manifest文件？
           break;
         case kTableFile:
           keep = (live.find(number) != live.end());
@@ -247,12 +248,12 @@ void DBImpl::DeleteObsoleteFiles() {
 
       if (!keep) {
         if (type == kTableFile) {
-          table_cache_->Evict(number);
+          table_cache_->Evict(number);  // 清除缓存
         }
         Log(options_.info_log, "Delete type=%d #%lld\n",
             static_cast<int>(type),
             static_cast<unsigned long long>(number));
-        env_->DeleteFile(dbname_ + "/" + filenames[i]);
+        env_->DeleteFile(dbname_ + "/" + filenames[i]); // 删除文件
       }
     }
   }
@@ -474,6 +475,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 
 // 1. 将Immutable Memtable所有数据写到一个sstable文件中
 // 2. 将新生成的sstale文件加入到合适的level中
+// 3. 设置edit
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
@@ -520,6 +522,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
+// 把imm_数据写到第0层的sstable中
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);

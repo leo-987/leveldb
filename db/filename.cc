@@ -140,7 +140,7 @@ Status SetCurrentFile(Env* env, const std::string& dbname,
   std::string tmp = TempFileName(dbname, descriptor_number);
   Status s = WriteStringToFileSync(env, contents.ToString() + "\n", tmp);
   if (s.ok()) {
-    s = env->RenameFile(tmp, CurrentFileName(dbname));
+    s = env->RenameFile(tmp, CurrentFileName(dbname));  // 新current文件写入成功才替换老的current文件
   }
   if (!s.ok()) {
     env->DeleteFile(tmp);
