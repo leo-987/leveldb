@@ -867,13 +867,14 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (descriptor_log_ == nullptr) {
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
+    // open一个空的manifest文件，写入当前版本的全量信息
     assert(descriptor_file_ == nullptr);
     new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
     edit->SetNextFile(next_file_number_);
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
-      s = WriteSnapshot(descriptor_log_);
+      s = WriteSnapshot(descriptor_log_); // 把不包括最新版本v的当前版本写入manifest文件中
     }
   }
 
@@ -885,7 +886,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     if (s.ok()) {
       std::string record;
       edit->EncodeTo(&record);
-      s = descriptor_log_->AddRecord(record);
+      s = descriptor_log_->AddRecord(record); // 把增量信息写入manifest文件
       if (s.ok()) {
         s = descriptor_file_->Sync();
       }
@@ -1124,6 +1125,9 @@ void VersionSet::Finalize(Version* v) {
   v->compaction_score_ = best_score;
 }
 
+// 1. 创建一个VersionEdit
+// 2. 把当前版本中的 A)下次压缩点 B)文件元信息 都放入VersionEdit中
+// 3. 把VersionEdit编码后写入manifest文件
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 

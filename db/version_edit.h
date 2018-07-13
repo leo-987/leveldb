@@ -14,6 +14,7 @@ namespace leveldb {
 
 class VersionSet;
 
+// 此类记录sstable文件的元数据
 struct FileMetaData {
   int refs;
   int allowed_seeks;          // Seeks allowed until compaction

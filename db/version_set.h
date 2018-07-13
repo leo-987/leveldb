@@ -307,13 +307,13 @@ class VersionSet {
 
   // Opened lazily
   WritableFile* descriptor_file_;
-  log::Writer* descriptor_log_;
+  log::Writer* descriptor_log_;   // manifest文件，每次启动leveldb都会创建一个新的manifest文件
   Version dummy_versions_;  // Head of circular doubly-linked list of versions.
   Version* current_;        // == dummy_versions_.prev_，指向当前version
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
-  // compact_pointer_[1] = 3，表示level 1下一次compation应该从key=3的地方开始
+  // compact_pointer_[1] = 3，表示level 1下一次compaction应该从key=3的地方开始
   std::string compact_pointer_[config::kNumLevels];
 
   // No copying allowed
