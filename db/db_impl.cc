@@ -40,7 +40,7 @@ struct DBImpl::CompactionState {
   // will never have to service a snapshot below smallest_snapshot.
   // Therefore if we have seen a sequence number S <= smallest_snapshot,
   // we can drop all entries for the same key with sequence numbers < S.
-  SequenceNumber smallest_snapshot;
+  SequenceNumber smallest_snapshot; // 序列号小于这个值的数据都可以被删除
 
   // Files produced by compaction
   struct Output {
@@ -54,7 +54,7 @@ struct DBImpl::CompactionState {
   WritableFile* outfile;
   TableBuilder* builder;
 
-  uint64_t total_bytes;
+  uint64_t total_bytes; // 合并后生成文件的总大小
 
   Output* current_output() { return &outputs[outputs.size()-1]; }
 
@@ -734,6 +734,7 @@ void DBImpl::BackgroundCompaction() {
         status.ToString().c_str(),
         versions_->LevelSummary(&tmp));
   } else {
+    // level和level+1层有key重叠，需要更复杂的合并
     CompactionState* compact = new CompactionState(c);
     status = DoCompactionWork(compact);
     if (!status.ok()) {
@@ -811,6 +812,11 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   return s;
 }
 
+// 把合并的sstable写到磁盘，并生成一个对应的cache
+// 有三种情况会被调用：
+// 1. 被合并的level层和level+2层之间重叠的部分超过20MB（默认值）
+// 2. 合并生成的sstable文件大小超过2MB（默认值）
+// 3. 合并结束前剩余的sstable数据
 Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
                                           Iterator* input) {
   assert(compact != nullptr);
@@ -863,7 +869,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   return s;
 }
 
-
+// 构建一个VersionEdit并和当前Version合并
 Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   mutex_.AssertHeld();
   Log(options_.info_log,  "Compacted %d@%d + %d@%d files => %lld bytes",
@@ -907,6 +913,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
 
+  // 这个迭代器能够遍历所有需要进行合并的sstable文件中的kv对，迭代器中的key是有序的吗？
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
   input->SeekToFirst();
   Status status;
@@ -916,6 +923,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
   for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
     // Prioritize immutable compaction work
+    // 如果immutable不为NULL，优先将它写入sstable，防止用户写操作阻塞
     if (has_imm_.NoBarrier_Load() != nullptr) {
       const uint64_t imm_start = env_->NowMicros();
       mutex_.Lock();
@@ -931,7 +939,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     Slice key = input->key();
     if (compact->compaction->ShouldStopBefore(key) &&
         compact->builder != nullptr) {
-      status = FinishCompactionOutputFile(compact, input);
+      status = FinishCompactionOutputFile(compact, input);  // 条件1
       if (!status.ok()) {
         break;
       }
@@ -954,7 +962,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         last_sequence_for_key = kMaxSequenceNumber;
       }
 
-      if (last_sequence_for_key <= compact->smallest_snapshot) {
+      // 下面的代码是判断当前key是否应该保存在sstable中
+      if (last_sequence_for_key <= compact->smallest_snapshot) {  // 序列号过期的都被丢弃
         // Hidden by an newer entry for same user key
         drop = true;    // (A)
       } else if (ikey.type == kTypeDeletion &&
@@ -967,6 +976,10 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         //     smaller sequence numbers will be dropped in the next
         //     few iterations of this loop (by rule (A) above).
         // Therefore this deletion marker is obsolete and can be dropped.
+
+        // 这里的意思应该是，某个key被标记为删除，但实际上可能并不能删除，应为更底层的level可能含有这个key，
+        // 如果将当前key删除却保留了底层level的key，那么下次读这个key时就会读到一个已经被删除的key，是不符合预期的，
+        // 但如果key的序列号比smallest_snapshot大，是不能被删除的，为什么？
         drop = true;
       }
 
@@ -985,21 +998,22 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     if (!drop) {
       // Open output file if necessary
       if (compact->builder == nullptr) {
-        status = OpenCompactionOutputFile(compact);
+        status = OpenCompactionOutputFile(compact); // 打开一个ldb文件，为输出sstable做准备
         if (!status.ok()) {
           break;
         }
       }
       if (compact->builder->NumEntries() == 0) {
-        compact->current_output()->smallest.DecodeFrom(key);
+        compact->current_output()->smallest.DecodeFrom(key);  // 从这里可以看出key是有序排列的
       }
-      compact->current_output()->largest.DecodeFrom(key);
-      compact->builder->Add(key, input->value());
+      compact->current_output()->largest.DecodeFrom(key);     // 最后一个key肯定是最大的
+      compact->builder->Add(key, input->value());             // for DoCompactionWork
 
       // Close output file if it is big enough
+      // 合并文件大小超过上限，则写磁盘，默认为2MB
       if (compact->builder->FileSize() >=
           compact->compaction->MaxOutputFileSize()) {
-        status = FinishCompactionOutputFile(compact, input);
+        status = FinishCompactionOutputFile(compact, input);  // 条件2
         if (!status.ok()) {
           break;
         }
@@ -1007,13 +1021,13 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     }
 
     input->Next();
-  }
+  } // 遍历迭代器结尾
 
   if (status.ok() && shutting_down_.Acquire_Load()) {
     status = Status::IOError("Deleting DB during compaction");
   }
   if (status.ok() && compact->builder != nullptr) {
-    status = FinishCompactionOutputFile(compact, input);
+    status = FinishCompactionOutputFile(compact, input);  // 条件3
   }
   if (status.ok()) {
     status = input->status();
@@ -1033,7 +1047,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
 
   mutex_.Lock();
-  stats_[compact->compaction->level() + 1].Add(stats);
+  stats_[compact->compaction->level() + 1].Add(stats);  // 更新下一层的统计信息
 
   if (status.ok()) {
     status = InstallCompactionResults(compact);

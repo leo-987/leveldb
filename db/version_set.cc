@@ -836,6 +836,11 @@ void VersionSet::AppendVersion(Version* v) {
   v->next_->prev_ = v;
 }
 
+// 1. 将edit和当前version合并，生成最新version
+// 2. 如果没有manifest文件，则把当前version全量信息写入manifest
+// 3. 将edit增量信息写入manifest文件中
+// 4. 如果生成了新的manifest文件，则将current文件指向它
+// 5. 将当前version指向最新生成的version
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (edit->has_log_number_) {
     assert(edit->log_number_ >= log_number_);
@@ -1288,6 +1293,7 @@ void VersionSet::GetRange2(const std::vector<FileMetaData*>& inputs1,
   GetRange(all, smallest, largest);
 }
 
+// 根据Compaction参数生成一个可以遍历所有参与合并的sstable文件的迭代器
 Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   ReadOptions options;
   options.verify_checksums = options_->paranoid_checks;
@@ -1535,10 +1541,15 @@ bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   return true;
 }
 
+// 是否应该生成一个sstable文件刷到磁盘
+// 判断依据是level+2层是否和level层有过多重叠的文件，目的应该是防止将来的合并耗时过多
 bool Compaction::ShouldStopBefore(const Slice& internal_key) {
   const VersionSet* vset = input_version_->vset_;
   // Scan to find earliest grandparent file that contains key.
   const InternalKeyComparator* icmp = &vset->icmp_;
+
+  // 遍历level+2层所有有重叠的sstable文件，检查是否重叠的文件总大小是否超过阈值
+  // 看起来传入的internal_key应该是有序的
   while (grandparent_index_ < grandparents_.size() &&
       icmp->Compare(internal_key,
                     grandparents_[grandparent_index_]->largest.Encode()) > 0) {

@@ -301,7 +301,7 @@ class VersionSet {
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_; // 当前manifest文件序号
-  uint64_t last_sequence_;        // 每一次write操作后都会+1
+  uint64_t last_sequence_;        // 从0开始，每一次write操作后都会+1
   uint64_t log_number_;       // 当前bin log文件序号
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
 
@@ -370,18 +370,18 @@ class Compaction {
   Compaction(const Options* options, int level);
 
   int level_;   // 表示正在合并哪一层
-  uint64_t max_output_file_size_;
+  uint64_t max_output_file_size_;   // 合并文件大小上限，默认2MB
   Version* input_version_;  // 合并对应的版本
   VersionEdit edit_;
 
   // Each compaction reads inputs from "level_" and "level_+1"
-  // inputs_[0]表示源level中需要合并的文件
-  // inputs_[1]表示目的level中需要合并的文件
+  // inputs_[0]表示level层中需要合并的文件
+  // inputs_[1]表示level+1层中需要合并的文件
   std::vector<FileMetaData*> inputs_[2];      // The two sets of inputs
 
   // State used to check for number of of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
-  std::vector<FileMetaData*> grandparents_;
+  std::vector<FileMetaData*> grandparents_;   // level+2层中有和level重叠的文件
   size_t grandparent_index_;  // Index in grandparent_starts_
   bool seen_key_;             // Some output key has been seen
   int64_t overlapped_bytes_;  // Bytes of overlap between current output
@@ -393,7 +393,7 @@ class Compaction {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
-  size_t level_ptrs_[config::kNumLevels];
+  size_t level_ptrs_[config::kNumLevels]; // 遍历每个level时的下标信息
 };
 
 }  // namespace leveldb

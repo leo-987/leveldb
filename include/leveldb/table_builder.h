@@ -24,6 +24,7 @@ class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 
+// 封装sstable并写入磁盘的类
 class LEVELDB_EXPORT TableBuilder {
  public:
   // Create a builder that will store the contents of the table it is

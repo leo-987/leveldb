@@ -21,7 +21,7 @@ struct TableBuilder::Rep {
   Options options;
   Options index_block_options;
   WritableFile* file;
-  uint64_t offset;    // sstable文件偏移量
+  uint64_t offset;    // sstable文件偏移量，相当于文件大小
   Status status;
   BlockBuilder data_block;
 
@@ -125,7 +125,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   }
 }
 
-// 将data block刷到磁盘sstable
+// 将data block刷到磁盘sstable文件上
 void TableBuilder::Flush() {
   Rep* r = rep_;
   assert(!r->closed);
@@ -275,6 +275,7 @@ uint64_t TableBuilder::NumEntries() const {
   return rep_->num_entries;
 }
 
+// sstable文件大小
 uint64_t TableBuilder::FileSize() const {
   return rep_->offset;
 }

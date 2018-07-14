@@ -178,8 +178,8 @@ class DBImpl : public DB {
   // compactions that produced data for the specified "level".
   struct CompactionStats {
     int64_t micros;
-    int64_t bytes_read;
-    int64_t bytes_written;
+    int64_t bytes_read;     // 合并源文件总大小
+    int64_t bytes_written;  // 合并目的文件总大小
 
     CompactionStats() : micros(0), bytes_read(0), bytes_written(0) { }
 
