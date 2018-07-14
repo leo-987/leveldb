@@ -99,8 +99,8 @@ class VersionEdit {
   bool has_last_sequence_;
 
   std::vector< std::pair<int, InternalKey> > compact_pointers_;
-  DeletedFileSet deleted_files_;
-  std::vector< std::pair<int, FileMetaData> > new_files_;
+  DeletedFileSet deleted_files_;                                // 需要删除的文件
+  std::vector< std::pair<int, FileMetaData> > new_files_;       // 需要添加的文件
 };
 
 }  // namespace leveldb

@@ -874,7 +874,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
-      s = WriteSnapshot(descriptor_log_); // 把不包括最新版本v的当前版本写入manifest文件中
+      s = WriteSnapshot(descriptor_log_); // 把不包括最新版本v的当前版本写入manifest文件中，这是起始的全量数据
     }
   }
 
@@ -886,7 +886,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     if (s.ok()) {
       std::string record;
       edit->EncodeTo(&record);
-      s = descriptor_log_->AddRecord(record); // 把增量信息写入manifest文件
+      s = descriptor_log_->AddRecord(record); // 把增量信息edit编码后写入manifest文件
       if (s.ok()) {
         s = descriptor_file_->Sync();
       }
@@ -1105,10 +1105,13 @@ void VersionSet::Finalize(Version* v) {
       // file size is small (perhaps because of a small write-buffer
       // setting, or very high compression ratios, or lots of
       // overwrites/deletions).
+
+      // level-0的文件数越多，越有可能被合并
       score = v->files_[level].size() /
           static_cast<double>(config::kL0_CompactionTrigger);
     } else {
       // Compute the ratio of current size to size limit.
+      // 其它level的总字节数越大，越有可能被合并
       const uint64_t level_bytes = TotalFileSize(v->files_[level]);
       score =
           static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
@@ -1324,15 +1327,16 @@ Compaction* VersionSet::PickCompaction() {
 
   // We prefer compactions triggered by too much data in a level over
   // the compactions triggered by seeks.
-  const bool size_compaction = (current_->compaction_score_ >= 1);
+  const bool size_compaction = (current_->compaction_score_ >= 1);  // 优先根据文件大小和个数进行合并
   const bool seek_compaction = (current_->file_to_compact_ != nullptr);
-  if (size_compaction) {
+  if (size_compaction) {  // 表示level-0文件数过多或其它level字节数过大，因此需要合并
     level = current_->compaction_level_;
     assert(level >= 0);
     assert(level+1 < config::kNumLevels);
-    c = new Compaction(options_, level);
+    c = new Compaction(options_, level);  // 文件过大需要合并
 
     // Pick the first file that comes after compact_pointer_[level]
+    // 根据compact_pointer_确定从哪个key开始合并，如果compact_pointer_为空，则从最小的key开始合并
     for (size_t i = 0; i < current_->files_[level].size(); i++) {
       FileMetaData* f = current_->files_[level][i];
       if (compact_pointer_[level].empty() ||
@@ -1347,7 +1351,7 @@ Compaction* VersionSet::PickCompaction() {
     }
   } else if (seek_compaction) {
     level = current_->file_to_compact_level_;
-    c = new Compaction(options_, level);
+    c = new Compaction(options_, level);  // seek次数过多需要合并
     c->inputs_[0].push_back(current_->file_to_compact_);
   } else {
     return nullptr;
@@ -1357,9 +1361,11 @@ Compaction* VersionSet::PickCompaction() {
   c->input_version_->Ref();
 
   // Files in level 0 may overlap each other, so pick up all overlapping ones
+  // level-0的文件key是相互重叠的，如果要合并某一个范围的key，那么必须找出重叠key的文件，将它们一块合并到下一层
+  // 例如：[1-4][2-5][4-7]，假设要合并4-7，那么要找出[1-4]的sstable，然后将三个文件一起合并
   if (level == 0) {
     InternalKey smallest, largest;
-    GetRange(c->inputs_[0], &smallest, &largest);
+    GetRange(c->inputs_[0], &smallest, &largest); // 根据inputs_找出最大key和最小key
     // Note that the next call will discard the file we placed in
     // c->inputs_[0] earlier and replace it with an overlapping set
     // which will include the picked file.
@@ -1486,6 +1492,10 @@ Compaction::~Compaction() {
   }
 }
 
+// 判断是否为Trivial Move的条件：
+// 1. level层有文件需要合并
+// 2. level+1层没有重叠的key
+// 3. level+2层文件总大小不能过大，应该是防止parent和grandparent合并时开销过大
 bool Compaction::IsTrivialMove() const {
   const VersionSet* vset = input_version_->vset_;
   // Avoid a move if there is lots of overlapping grandparent data.

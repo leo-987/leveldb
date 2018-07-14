@@ -138,14 +138,14 @@ class Version {
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
-  FileMetaData* file_to_compact_;
-  int file_to_compact_level_;
+  FileMetaData* file_to_compact_; // seek次数过多需要合并的文件
+  int file_to_compact_level_;     // seek合并对应的层数
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
-  double compaction_score_;
-  int compaction_level_;
+  double compaction_score_; // 合并的必要性，越大越需要合并
+  int compaction_level_;    // 需要合并的level
 
   explicit Version(VersionSet* vset)
       : vset_(vset), next_(this), prev_(this), refs_(0),
@@ -301,7 +301,7 @@ class VersionSet {
   const InternalKeyComparator icmp_;
   uint64_t next_file_number_;
   uint64_t manifest_file_number_; // 当前manifest文件序号
-  uint64_t last_sequence_;
+  uint64_t last_sequence_;        // 每一次write操作后都会+1
   uint64_t log_number_;       // 当前bin log文件序号
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
 
@@ -369,12 +369,14 @@ class Compaction {
 
   Compaction(const Options* options, int level);
 
-  int level_;
+  int level_;   // 表示正在合并哪一层
   uint64_t max_output_file_size_;
-  Version* input_version_;
+  Version* input_version_;  // 合并对应的版本
   VersionEdit edit_;
 
   // Each compaction reads inputs from "level_" and "level_+1"
+  // inputs_[0]表示源level中需要合并的文件
+  // inputs_[1]表示目的level中需要合并的文件
   std::vector<FileMetaData*> inputs_[2];      // The two sets of inputs
 
   // State used to check for number of of overlapping grandparent files

@@ -32,6 +32,7 @@ struct DBImpl::Writer {
   explicit Writer(port::Mutex* mu) : cv(mu) { }
 };
 
+// 封装Compaction和合并相关信息
 struct DBImpl::CompactionState {
   Compaction* const compaction;
 
@@ -344,7 +345,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   }
 
   if (versions_->LastSequence() < max_sequence) {
-    versions_->SetLastSequence(max_sequence);
+    versions_->SetLastSequence(max_sequence); // for Recover
   }
 
   return Status::OK();
@@ -522,7 +523,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
-// 把imm_数据写到第0层的sstable中
+// 1. 把imm_数据写到第0层的sstable中
+// 2. 更新缓存
+// 3. 更新version
+// 4. 删除过期文件，包括bin_log、manifest、sstable文件
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -550,12 +554,13 @@ void DBImpl::CompactMemTable() {
     imm_->Unref();
     imm_ = nullptr;
     has_imm_.Release_Store(nullptr);
-    DeleteObsoleteFiles();
+    DeleteObsoleteFiles();  // for CompactMemTable
   } else {
     RecordBackgroundError(s);
   }
 }
 
+// 手动合并接口，由用户主动调用
 void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
   int max_level_with_files = 1;
   {
@@ -703,7 +708,7 @@ void DBImpl::BackgroundCompaction() {
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
   } else {
-    c = versions_->PickCompaction();
+    c = versions_->PickCompaction();    // 计算需要合并哪一层的那哪些sstable
   }
 
   Status status;
@@ -711,12 +716,13 @@ void DBImpl::BackgroundCompaction() {
     // Nothing to do
   } else if (!is_manual && c->IsTrivialMove()) {
     // Move file to next level
+    // 由于level+1层没有重叠key，所以直接移动到level+1层
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
-    c->edit()->DeleteFile(c->level(), f->number);
+    c->edit()->DeleteFile(c->level(), f->number);               // 将f从level层删除
     c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
-                       f->smallest, f->largest);
-    status = versions_->LogAndApply(c->edit(), &mutex_);
+                       f->smallest, f->largest);                // 将f加入到level+1层
+    status = versions_->LogAndApply(c->edit(), &mutex_);        // 合并ssable，生成新version并更新manifest文件
     if (!status.ok()) {
       RecordBackgroundError(status);
     }
@@ -735,7 +741,7 @@ void DBImpl::BackgroundCompaction() {
     }
     CleanupCompaction(compact);
     c->ReleaseInputs();
-    DeleteObsoleteFiles();
+    DeleteObsoleteFiles();  // for BackgroundCompaction
   }
   delete c;
 
@@ -1244,7 +1250,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     }
     if (updates == tmp_batch_) tmp_batch_->Clear();
 
-    versions_->SetLastSequence(last_sequence);
+    versions_->SetLastSequence(last_sequence);  // for Write
   }
 
   while (true) {

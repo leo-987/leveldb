@@ -167,7 +167,7 @@ class DBImpl : public DB {
     const InternalKey* end;     // null means end of key range
     InternalKey tmp_storage;    // Used to keep track of compaction progress
   };
-  ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
+  ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);  // 这个指针只有在用户主动合并时才是非空
 
   VersionSet* const versions_;  // VersionSet包含了所有Version，Version之间用链表相连
 
