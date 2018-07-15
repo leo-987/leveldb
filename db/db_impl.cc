@@ -167,7 +167,7 @@ Status DBImpl::NewDB() {
   new_db.SetNextFile(2);
   new_db.SetLastSequence(0);
 
-  const std::string manifest = DescriptorFileName(dbname_, 1);
+  const std::string manifest = DescriptorFileName(dbname_, 1);  // dbname/MANIFEST-1
   WritableFile* file;
   Status s = env_->NewWritableFile(manifest, &file);
   if (!s.ok()) {
@@ -177,7 +177,7 @@ Status DBImpl::NewDB() {
     log::Writer log(file);
     std::string record;
     new_db.EncodeTo(&record);
-    s = log.AddRecord(record);
+    s = log.AddRecord(record);  // new_db相当于一个空的增量，也就是DB的初始状态
     if (s.ok()) {
       s = file->Close();
     }
@@ -260,6 +260,7 @@ void DBImpl::DeleteObsoleteFiles() {
   }
 }
 
+// DB::Open()中调用，
 Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   mutex_.AssertHeld();
 
@@ -268,14 +269,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   // may already exist from a previous failed creation attempt.
   env_->CreateDir(dbname_);
   assert(db_lock_ == nullptr);
-  Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
+  Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);  // 一个数据库只能有一个实例在使用它
   if (!s.ok()) {
     return s;
   }
 
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
-      s = NewDB();
+      s = NewDB();  // 如果CURRENT文件不存在，则新建一个DB
       if (!s.ok()) {
         return s;
       }
@@ -303,7 +304,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   // Note that PrevLogNumber() is no longer used, but we pay
   // attention to it in case we are recovering a database
   // produced by an older version of leveldb.
-  const uint64_t min_log = versions_->LogNumber();
+  const uint64_t min_log = versions_->LogNumber();    // 当前版本的log序号已经在之前的Recover中获得了，即manifest中最后一个edit的log序号
   const uint64_t prev_log = versions_->PrevLogNumber();
   std::vector<std::string> filenames;
   s = env_->GetChildren(dbname_, &filenames);
@@ -315,11 +316,13 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   uint64_t number;
   FileType type;
   std::vector<uint64_t> logs;
+
+  // 下面检查所有版本对应的文件是否都在目录下存在，不存在则返回异常
   for (size_t i = 0; i < filenames.size(); i++) {
     if (ParseFileName(filenames[i], &number, &type)) {
       expected.erase(number);
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
-        logs.push_back(number);
+        logs.push_back(number); // 只保留比当前log序号新的log文件
     }
   }
   if (!expected.empty()) {
@@ -351,6 +354,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   return Status::OK();
 }
 
+// 通过log文件恢复memtable
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                               bool* save_manifest, VersionEdit* edit,
                               SequenceNumber* max_sequence) {
@@ -546,7 +550,8 @@ void DBImpl::CompactMemTable() {
   if (s.ok()) {
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
-    s = versions_->LogAndApply(&edit, &mutex_); // 根据edit的变化生成新版本，由于是生成新的sstable文件，所以是edit->new_files_中有新数据
+    // 根据edit的变化生成新版本，由于是生成新的sstable文件，所以是edit->new_files_中有新数据
+    s = versions_->LogAndApply(&edit, &mutex_);   // for CompactMemTable
   }
 
   if (s.ok()) {
@@ -677,10 +682,11 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
-  MaybeScheduleCompaction();
+  MaybeScheduleCompaction();  // 完成当前合并后，有可能在启动下一轮合并
   background_work_finished_signal_.SignalAll(); // 通知等待中的其它用户线程
 }
 
+// compaction主体函数
 // 1. 将imm_数据写入sstable
 // 2. 各个level之间的数据进行合并
 void DBImpl::BackgroundCompaction() {
@@ -694,7 +700,7 @@ void DBImpl::BackgroundCompaction() {
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
-  if (is_manual) {
+  if (is_manual) {  // 手动合并，先忽略
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
@@ -913,7 +919,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
 
-  // 这个迭代器能够遍历所有需要进行合并的sstable文件中的kv对，迭代器中的key是有序的吗？
+  // 这个迭代器能够遍历所有需要进行合并的sstable文件中的kv对，迭代器中的key貌似是有序的
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
   input->SeekToFirst();
   Status status;
@@ -1545,7 +1551,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   if (s.ok() && save_manifest) {
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
-    s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
+    s = impl->versions_->LogAndApply(&edit, &impl->mutex_);   // in DB::Open
   }
   if (s.ok()) {
     impl->DeleteObsoleteFiles();

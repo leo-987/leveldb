@@ -16,6 +16,8 @@ class WritableFile;
 
 namespace log {
 
+// 这个类封装WritableFile，用于把传入的slice格式化后传入WritableFile
+// WritableFile只处理字节流，而Writer需要理解block的含义
 class Writer {
  public:
   // Create a writer that will append data to "*dest".

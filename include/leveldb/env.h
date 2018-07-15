@@ -73,6 +73,8 @@ class LEVELDB_EXPORT Env {
   // returns non-OK.
   //
   // The returned file will only be accessed by one thread at a time.
+  // 1. open指定的文件
+  // 2. new一个PosixWritableFile对象，保存fname和fd
   virtual Status NewWritableFile(const std::string& fname,
                                  WritableFile** result) = 0;
 
@@ -130,6 +132,7 @@ class LEVELDB_EXPORT Env {
   // to go away.
   //
   // May create the named file if it does not already exist.
+  // 内部使用flock对文件上锁
   virtual Status LockFile(const std::string& fname, FileLock** lock) = 0;
 
   // Release the lock acquired by a previous successful call to LockFile.
@@ -169,6 +172,7 @@ class LEVELDB_EXPORT Env {
 };
 
 // A file abstraction for reading sequentially through a file
+// 负责读磁盘的类
 class LEVELDB_EXPORT SequentialFile {
  public:
   SequentialFile() = default;
@@ -224,6 +228,7 @@ class LEVELDB_EXPORT RandomAccessFile {
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.
+// 负责写磁盘的类，内部提供了buffer，防止小数据频繁写
 class LEVELDB_EXPORT WritableFile {
  public:
   WritableFile() = default;

@@ -230,7 +230,7 @@ class PosixWritableFile : public WritableFile {
   std::string filename_;
   int fd_;
   char buf_[kBufSize];
-  size_t pos_;
+  size_t pos_;  // 指向buffer空闲区域开头
 
  public:
   PosixWritableFile(const std::string& fname, int fd)
@@ -621,20 +621,22 @@ class PosixEnv : public Env {
 
   // BGThread() is the body of the background thread
   void BGThread();
+
+  // 这是一个静态成员函数
   static void* BGThreadWrapper(void* arg) {
     reinterpret_cast<PosixEnv*>(arg)->BGThread();
     return nullptr;
   }
 
   pthread_mutex_t mu_;
-  pthread_cond_t bgsignal_;
+  pthread_cond_t bgsignal_; // 后台线程等待任务到来的信号量
   pthread_t bgthread_;
-  bool started_bgthread_;
+  bool started_bgthread_;   // 是否开启了后台线程，保证只创建了一个后台线程
 
   // Entry per Schedule() call
   struct BGItem { void* arg; void (*function)(void*); };
   typedef std::deque<BGItem> BGQueue;
-  BGQueue queue_;
+  BGQueue queue_; // 队列中的一个item就是一个(函数+参数)对
 
   PosixLockTable locks_;
   Limiter mmap_limit_;
@@ -677,6 +679,8 @@ PosixEnv::PosixEnv()
   PthreadCall("cvar_init", pthread_cond_init(&bgsignal_, nullptr));
 }
 
+// 1. 将参数function压入任务队列中
+// 2. 如果有必要的话，开启一个后台线程，这个线程从任务队列中不断的取出任务执行
 void PosixEnv::Schedule(void (*function)(void*), void* arg) {
   PthreadCall("lock", pthread_mutex_lock(&mu_));
 
@@ -690,6 +694,7 @@ void PosixEnv::Schedule(void (*function)(void*), void* arg) {
 
   // If the queue is currently empty, the background thread may currently be
   // waiting.
+  // 这里唤醒应该没问题，因为还有一个mutex作为保障
   if (queue_.empty()) {
     PthreadCall("signal", pthread_cond_signal(&bgsignal_));
   }
@@ -702,6 +707,7 @@ void PosixEnv::Schedule(void (*function)(void*), void* arg) {
   PthreadCall("unlock", pthread_mutex_unlock(&mu_));
 }
 
+// 后台线程不会退出，始终等待信号量，然后从任务队列取出任务执行
 void PosixEnv::BGThread() {
   while (true) {
     // Wait until there is an item that is ready to run

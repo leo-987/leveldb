@@ -248,6 +248,7 @@ class VersionSet {
   Iterator* MakeInputIterator(Compaction* c);
 
   // Returns true iff some level needs a compaction.
+  // 需要合并的两个条件：1）文件总大小过大（非0层）或文件数过多（0层）；2）seek次数过多
   bool NeedsCompaction() const {
     Version* v = current_;
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
@@ -302,8 +303,8 @@ class VersionSet {
   uint64_t next_file_number_;
   uint64_t manifest_file_number_; // 当前manifest文件序号
   uint64_t last_sequence_;        // 从0开始，每一次write操作后都会+1
-  uint64_t log_number_;       // 当前bin log文件序号
-  uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
+  uint64_t log_number_;           // 当前版本的bin log文件序号
+  uint64_t prev_log_number_;      // 0 or backing store for memtable being compacted
 
   // Opened lazily
   WritableFile* descriptor_file_;

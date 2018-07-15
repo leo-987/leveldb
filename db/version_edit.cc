@@ -38,6 +38,7 @@ void VersionEdit::Clear() {
   new_files_.clear();
 }
 
+// 将VersionEdit编码成string
 void VersionEdit::EncodeTo(std::string* dst) const {
   if (has_comparator_) {
     PutVarint32(dst, kComparator);

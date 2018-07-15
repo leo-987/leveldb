@@ -610,6 +610,7 @@ std::string Version::DebugString() const {
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
+// 将多个VersionEdit合并成一个Version
 class VersionSet::Builder {
  private:
   // Helper to sort by v->files_[file_number].smallest
@@ -974,6 +975,8 @@ Status VersionSet::Recover(bool *save_manifest) {
     log::Reader reader(file, &reporter, true/*checksum*/, 0/*initial_offset*/);
     Slice record;
     std::string scratch;
+
+    // 从前往后遍历manifest文件中的所有edit
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       VersionEdit edit;
       s = edit.DecodeFrom(record);
@@ -1040,7 +1043,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     manifest_file_number_ = next_file;
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
-    log_number_ = log_number;
+    log_number_ = log_number;   // for Recover
     prev_log_number_ = prev_log_number;
 
     // See if we can reuse the existing MANIFEST file.

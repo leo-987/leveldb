@@ -88,10 +88,10 @@ class VersionEdit {
   typedef std::set< std::pair<int, uint64_t> > DeletedFileSet;
 
   std::string comparator_;
-  uint64_t log_number_;
+  uint64_t log_number_;           // bin log序号，初始值0
   uint64_t prev_log_number_;
-  uint64_t next_file_number_;
-  SequenceNumber last_sequence_;
+  uint64_t next_file_number_;     // 初始值2
+  SequenceNumber last_sequence_;  // 初始值0
   bool has_comparator_;
   bool has_log_number_;
   bool has_prev_log_number_;

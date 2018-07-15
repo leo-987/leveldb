@@ -132,12 +132,12 @@ class DBImpl : public DB {
   TableCache* const table_cache_;   // 所有打开的sstable文件在内存中的缓存
 
   // Lock over the persistent DB state.  Non-null iff successfully acquired.
-  FileLock* db_lock_;
+  FileLock* db_lock_;   // 保存上锁的文件名和fd
 
   // State below is protected by mutex_
   port::Mutex mutex_;
   port::AtomicPointer shutting_down_;  // DB是否被关闭
-  port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_);
+  port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_);    // 由于后台线程合并完成通知用户线程
   MemTable* mem_;
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
   port::AtomicPointer has_imm_;       // So bg thread can detect non-null imm_
@@ -157,7 +157,7 @@ class DBImpl : public DB {
   std::set<uint64_t> pending_outputs_ GUARDED_BY(mutex_);
 
   // Has a background compaction been scheduled or is running?
-  bool background_compaction_scheduled_ GUARDED_BY(mutex_);
+  bool background_compaction_scheduled_ GUARDED_BY(mutex_); // 是否有后台线程正在工作
 
   // Information for a manual compaction
   struct ManualCompaction {

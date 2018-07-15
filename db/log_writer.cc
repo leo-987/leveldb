@@ -33,8 +33,9 @@ Writer::Writer(WritableFile* dest, uint64_t dest_length)
 Writer::~Writer() {
 }
 
-// slice按32KB切分，顺序写入log
+// slice按32KB切分，顺序写入WritableFile，后者会在何时的时候把数据刷到磁盘
 // 每写入一次，都需要在头部加上checksum+length+type
+// 如果block空间不足，slice将会被拆分到两个block中
 Status Writer::AddRecord(const Slice& slice) {
   const char* ptr = slice.data();
   size_t left = slice.size();
@@ -49,6 +50,7 @@ Status Writer::AddRecord(const Slice& slice) {
     assert(leftover >= 0);
     if (leftover < kHeaderSize) {
       // Switch to a new block
+      // 当前block大小不足，尾部填充0
       if (leftover > 0) {
         // Fill the trailer (literal below relies on kHeaderSize being 7)
         assert(kHeaderSize == 7);
