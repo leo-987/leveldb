@@ -119,7 +119,7 @@ bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
 }
 
 // 用user_key和s构成LookupKey
-// 主要包括(size, user_key, sequence number, type)
+// 主要包括(size, user_key, sequence_number, type)
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();
   size_t needed = usize + 13;  // A conservative estimate

@@ -109,10 +109,11 @@ void MemTable::Add(SequenceNumber s, ValueType type,
 }
 
 // 在跳表中查找key对应的value
+// 找到返回true，否则返回false
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();  // 把LookupKey转化成Slice
   Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());           // for Get，查找结果保存在iter.node_
+  iter.Seek(memkey.data());           // in MemTable::Get，查找结果保存在iter.node_
   if (iter.Valid()) {                 // 是否找到对应node
     // entry format is:
     //    klength  varint32

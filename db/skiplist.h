@@ -56,6 +56,7 @@ class SkipList {
   bool Contains(const Key& key) const;
 
   // Iteration over the contents of a skip list
+  // 工具类，用于查找遍历和查找跳表
   class Iterator {
    public:
     // Initialize an iterator over the specified list.
@@ -223,7 +224,7 @@ inline void SkipList<Key,Comparator>::Iterator::Prev() {
 
 template<typename Key, class Comparator>
 inline void SkipList<Key,Comparator>::Iterator::Seek(const Key& target) {
-  node_ = list_->FindGreaterOrEqual(target, nullptr); // for seek
+  node_ = list_->FindGreaterOrEqual(target, nullptr); // in Iterator::Seek，不需要保存前驱结点
 }
 
 template<typename Key, class Comparator>
@@ -340,7 +341,7 @@ void SkipList<Key,Comparator>::Insert(const Key& key) {
   // TODO(opt): We can use a barrier-free variant of FindGreaterOrEqual()
   // here since Insert() is externally synchronized.
   Node* prev[kMaxHeight];
-  Node* x = FindGreaterOrEqual(key, prev);  // for Insert
+  Node* x = FindGreaterOrEqual(key, prev);  // in SkipList<Key,Comparator>::Insert
 
   // Our data structure does not allow duplicate insertion
   assert(x == nullptr || !Equal(key, x->key));

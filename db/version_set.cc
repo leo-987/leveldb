@@ -83,6 +83,7 @@ Version::~Version() {
   }
 }
 
+// 二分查找法找出files中最大key大于参数key且最接近参数key的文件，返回索引下标
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files,
              const Slice& key) {
@@ -350,7 +351,7 @@ Status Version::Get(const ReadOptions& options,
   // in an smaller level, later levels are irrelevant.
   std::vector<FileMetaData*> tmp;
   FileMetaData* tmp2;
-  for (int level = 0; level < config::kNumLevels; level++) {
+  for (int level = 0; level < config::kNumLevels; level++) {  // 逐层查找
     size_t num_files = files_[level].size();
     if (num_files == 0) continue;
 
@@ -360,14 +361,14 @@ Status Version::Get(const ReadOptions& options,
       // Level-0 files may overlap each other.  Find all files that
       // overlap user_key and process them in order from newest to oldest.
       tmp.reserve(num_files);
-      for (uint32_t i = 0; i < num_files; i++) {
+      for (uint32_t i = 0; i < num_files; i++) {  // 遍历第0层的所有文件，找到包含user_key的文件并压入tmp中
         FileMetaData* f = files[i];
         if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
             ucmp->Compare(user_key, f->largest.user_key()) <= 0) {
           tmp.push_back(f);
         }
       }
-      if (tmp.empty()) continue;
+      if (tmp.empty()) continue;  // 如果第0层没有包含要查找key的文件，则跳到下一行继续查找
 
       std::sort(tmp.begin(), tmp.end(), NewestFirst);
       files = &tmp[0];
@@ -377,16 +378,16 @@ Status Version::Get(const ReadOptions& options,
       uint32_t index = FindFile(vset_->icmp_, files_[level], ikey);
       if (index >= num_files) {
         files = nullptr;
-        num_files = 0;
+        num_files = 0;    // 这一行没有找到包含user_key的文件
       } else {
         tmp2 = files[index];
         if (ucmp->Compare(user_key, tmp2->smallest.user_key()) < 0) {
           // All of "tmp2" is past any data for user_key
           files = nullptr;
-          num_files = 0;
+          num_files = 0;  // 这一行没有找到包含user_key的文件
         } else {
           files = &tmp2;
-          num_files = 1;
+          num_files = 1;  // 这一行找到了包含user_key的文件，由于sstable没有重叠，所以只有一个文件包含user_key
         }
       }
     }
@@ -1083,7 +1084,7 @@ bool VersionSet::ReuseManifest(const std::string& dscname,
   }
 
   Log(options_->info_log, "Reusing MANIFEST %s\n", dscname.c_str());
-  descriptor_log_ = new log::Writer(descriptor_file_, manifest_size);
+  descriptor_log_ = new log::Writer(descriptor_file_, manifest_size);   // open数据库时，如果复用老的manifest，那么descriptor_log_就指向老的manifest文件
   manifest_file_number_ = manifest_number;
   return true;
 }

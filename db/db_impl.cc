@@ -201,7 +201,10 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
   }
 }
 
-// 不同类型的文件选择不同的删除策略
+// 删除过期或无效文件，在每次compaction或者recovery结尾执行，不同类型的文件选择不同的删除策略：
+//  log：只保留当前版本
+//  manifest：只保留当前版本
+//  sstable：只保留所有版本引用到的
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -260,7 +263,10 @@ void DBImpl::DeleteObsoleteFiles() {
   }
 }
 
-// DB::Open()中调用，
+// DB::Open()中调用
+// 1. 根据CURRENT文件找到最新manifest文件，并还原所有版本
+// 2. 将log文件中的数据还原到memtable，然后写入level-0
+// 3. 删除过期文件
 Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   mutex_.AssertHeld();
 
@@ -355,6 +361,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
 }
 
 // 通过log文件恢复memtable
+// 如果不复用老的log文件，则并将memtable写到level-0，否则不写入level-0
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                               bool* save_manifest, VersionEdit* edit,
                               SequenceNumber* max_sequence) {
@@ -456,7 +463,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       log_ = new log::Writer(logfile_, lfile_size);
       logfile_number_ = log_number;
       if (mem != nullptr) {
-        mem_ = mem;
+        mem_ = mem;     // 如果复用原来的log，则直接使用刚从log中恢复的memtable
         mem = nullptr;
       } else {
         // mem can be nullptr if lognum exists but was empty.
@@ -559,7 +566,7 @@ void DBImpl::CompactMemTable() {
     imm_->Unref();
     imm_ = nullptr;
     has_imm_.Release_Store(nullptr);
-    DeleteObsoleteFiles();  // for CompactMemTable
+    DeleteObsoleteFiles();  // in CompactMemTable
   } else {
     RecordBackgroundError(s);
   }
@@ -748,7 +755,7 @@ void DBImpl::BackgroundCompaction() {
     }
     CleanupCompaction(compact);
     c->ReleaseInputs();
-    DeleteObsoleteFiles();  // for BackgroundCompaction
+    DeleteObsoleteFiles();  // in BackgroundCompaction
   }
   delete c;
 
@@ -1140,7 +1147,7 @@ Status DBImpl::Get(const ReadOptions& options,
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
   } else {
-    snapshot = versions_->LastSequence();
+    snapshot = versions_->LastSequence(); // 如果用户未指定版本，则使用最新的版本号
   }
 
   MemTable* mem = mem_;
@@ -1158,10 +1165,10 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Unlock();
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
-    if (mem->Get(lkey, value, &s)) {
-      // Done
-    } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
-      // Done
+    if (mem->Get(lkey, value, &s)) {  // in DBImpl::Get
+      // Done，找到
+    } else if (imm != nullptr && imm->Get(lkey, value, &s)) { // in DBImpl::Get
+      // Done，找到
     } else {
       s = current->Get(options, lkey, value, &stats);
       have_stat_update = true;
@@ -1533,7 +1540,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
   Status s = impl->Recover(&edit, &save_manifest);
-  if (s.ok() && impl->mem_ == nullptr) {
+  if (s.ok() && impl->mem_ == nullptr) {    // mem_为NULL表示使用新的log和memtable
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;
@@ -1548,13 +1555,13 @@ Status DB::Open(const Options& options, const std::string& dbname,
       impl->mem_->Ref();
     }
   }
-  if (s.ok() && save_manifest) {
+  if (s.ok() && save_manifest) {  // save_manifest==true表示使用新的manifest文件
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
     s = impl->versions_->LogAndApply(&edit, &impl->mutex_);   // in DB::Open
   }
   if (s.ok()) {
-    impl->DeleteObsoleteFiles();
+    impl->DeleteObsoleteFiles();  // in DB::Open
     impl->MaybeScheduleCompaction();
   }
   impl->mutex_.Unlock();

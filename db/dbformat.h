@@ -176,6 +176,7 @@ inline bool ParseInternalKey(const Slice& internal_key,
 }
 
 // A helper class useful for DBImpl::Get()
+// 用于在memtable中查找的key
 class LookupKey {
  public:
   // Initialize *this for looking up user_key at a snapshot with
@@ -201,9 +202,9 @@ class LookupKey {
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
-  const char* start_;    // internalKey开头
-  const char* kstart_;   // user key开头
-  const char* end_;      // internalKey结尾
+  const char* start_;
+  const char* kstart_;
+  const char* end_;
   char space_[200];      // Avoid allocation for short keys
 
   // No copying allowed
