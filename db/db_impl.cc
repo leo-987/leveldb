@@ -1137,6 +1137,9 @@ int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
 }
 
 // 输入key，输出value
+// 1. 在memtable中查找，实际上是跳表的查找
+// 2. 在immutable memtable中查找，实际上是跳表的查找
+// 3. 在sstable中查找，实际上是在cache中查找
 Status DBImpl::Get(const ReadOptions& options,
                    const Slice& key,
                    std::string* value) {
@@ -1147,7 +1150,7 @@ Status DBImpl::Get(const ReadOptions& options,
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
   } else {
-    snapshot = versions_->LastSequence(); // 如果用户未指定版本，则使用最新的版本号
+    snapshot = versions_->LastSequence(); // 如果用户未指定快照，则使用最新的序列号
   }
 
   MemTable* mem = mem_;

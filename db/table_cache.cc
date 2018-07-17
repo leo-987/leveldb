@@ -105,6 +105,8 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
   return result;
 }
 
+// 1. 在cache中查找sstable对应的node，找不到则把sstable读到cache中并建立hash node
+// 2. 在sstable对应的node中查找key对应的value
 Status TableCache::Get(const ReadOptions& options,
                        uint64_t file_number,
                        uint64_t file_size,
@@ -112,9 +114,9 @@ Status TableCache::Get(const ReadOptions& options,
                        void* arg,
                        void (*saver)(void*, const Slice&, const Slice&)) {
   Cache::Handle* handle = nullptr;
-  Status s = FindTable(file_number, file_size, &handle);
+  Status s = FindTable(file_number, file_size, &handle);  // in TableCache::Get
   if (s.ok()) {
-    Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;
+    Table* t = reinterpret_cast<TableAndFile*>(cache_->Value(handle))->table;   // in TableCache::Get
     s = t->InternalGet(options, k, arg, saver);
     cache_->Release(handle);
   }

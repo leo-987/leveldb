@@ -332,6 +332,10 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key,
   }
 }
 
+// 1. 从上到下查找包含k的sstable
+// 2. 在cache中找到sstable对应的node
+// 3. 依次在node中查找index_bloc -> data_block -> entry
+// 4. 最后返回entry中的key、value
 Status Version::Get(const ReadOptions& options,
                     const LookupKey& k,
                     std::string* value,
@@ -392,6 +396,7 @@ Status Version::Get(const ReadOptions& options,
       }
     }
 
+    // 对可能包含user_key的文件进行搜索，实际上是对sstable对应的cache进行搜索
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != nullptr && stats->seek_file == nullptr) {
         // We have had more than one seek for this read.  Charge the 1st file.
@@ -403,6 +408,7 @@ Status Version::Get(const ReadOptions& options,
       last_file_read = f;
       last_file_read_level = level;
 
+      // 搜索结果放在saver中
       Saver saver;
       saver.state = kNotFound;
       saver.ucmp = ucmp;
@@ -417,7 +423,7 @@ Status Version::Get(const ReadOptions& options,
         case kNotFound:
           break;      // Keep searching in other files
         case kFound:
-          return s;
+          return s;   // 找到直接返回
         case kDeleted:
           s = Status::NotFound(Slice());  // Use empty error message for speed
           return s;
