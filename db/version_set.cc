@@ -1050,7 +1050,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     manifest_file_number_ = next_file;
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
-    log_number_ = log_number;   // for Recover
+    log_number_ = log_number;
     prev_log_number_ = prev_log_number;
 
     // See if we can reuse the existing MANIFEST file.

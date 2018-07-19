@@ -354,7 +354,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   }
 
   if (versions_->LastSequence() < max_sequence) {
-    versions_->SetLastSequence(max_sequence); // for Recover
+    versions_->SetLastSequence(max_sequence);
   }
 
   return Status::OK();
@@ -1280,7 +1280,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
     }
     if (updates == tmp_batch_) tmp_batch_->Clear();
 
-    versions_->SetLastSequence(last_sequence);  // for Write
+    versions_->SetLastSequence(last_sequence);
   }
 
   while (true) {
@@ -1355,12 +1355,19 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+// 判断当前memtable是否有足够的空间可以写入，没有则需要等待，直到可写，函数才返回
+// 1. 如果level-0文件数超过8个，则sleep一小会，等待合并线程合并完成
+// 2. 如果memtable使用未超过4MB，则函数返回
+// 3. 如果memtable使用超过4MB，且immutable memtable不为空，则休眠直到minor compaction完成
+// 4. 如果level-0文件数超过12个，则休眠直到major compaction完成
+// 5. 如果memtable使用超过4MB，且immutable memtable为空，
+//    则memtable转换为immutable memtable，然后新建一个memtable，并触发一次minor compaction
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
   bool allow_delay = !force;
   Status s;
-  while (true) {  // 这个循环会一直执行，直到memtable有足够的空间，或者后台线程出错
+  while (true) {            // 这个循环会一直执行，直到memtable有足够的空间，或者后台线程出错
     if (!bg_error_.ok()) {  // 后台线程执行有错误，直接返回
       // Yield previous error
       s = bg_error_;
