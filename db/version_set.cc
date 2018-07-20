@@ -845,7 +845,7 @@ void VersionSet::AppendVersion(Version* v) {
 }
 
 // 1. 将edit和当前version合并，生成最新version
-// 2. 如果没有manifest文件，则把当前version全量信息写入manifest
+// 2. 如果没有manifest文件，则把当前version（不包括edit）全量信息写入manifest
 // 3. 将edit增量信息写入manifest文件中
 // 4. 如果生成了新的manifest文件，则将current文件指向它
 // 5. 将当前version指向最新生成的version
@@ -854,7 +854,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     assert(edit->log_number_ >= log_number_);
     assert(edit->log_number_ < next_file_number_);
   } else {
-    edit->SetLogNumber(log_number_);
+    edit->SetLogNumber(log_number_);  // 这里表示edit没有对应的log，即major compaction
   }
 
   if (!edit->has_prev_log_number_) {
@@ -920,7 +920,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   // Install the new version
   if (s.ok()) {
     AppendVersion(v);   // 把新version放入VersionSet中
-    log_number_ = edit->log_number_;
+    log_number_ = edit->log_number_;  // 把新加入的edit对应的log序号赋值给VersionSet::log_number_
     prev_log_number_ = edit->prev_log_number_;
   } else {
     delete v;
@@ -1358,7 +1358,7 @@ Compaction* VersionSet::PickCompaction() {
       if (compact_pointer_[level].empty() ||
           icmp_.Compare(f->largest.Encode(), compact_pointer_[level]) > 0) {
         c->inputs_[0].push_back(f);
-        break;
+        break;  // 注意这里只push了一次
       }
     }
     if (c->inputs_[0].empty()) {

@@ -202,8 +202,8 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
 }
 
 // 删除过期或无效文件，在每次compaction或者recovery结尾执行，不同类型的文件选择不同的删除策略：
-//  log：只保留当前版本
-//  manifest：只保留当前版本
+//  log：只保留最新的版本
+//  manifest：只保留最新的版本
 //  sstable：只保留所有版本引用到的
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
@@ -546,7 +546,7 @@ void DBImpl::CompactMemTable() {
   VersionEdit edit;
   Version* base = versions_->current();
   base->Ref();
-  Status s = WriteLevel0Table(imm_, &edit, base);   // for CompactMemTable
+  Status s = WriteLevel0Table(imm_, &edit, base);
   base->Unref();
 
   if (s.ok() && shutting_down_.Acquire_Load()) {
@@ -558,7 +558,7 @@ void DBImpl::CompactMemTable() {
     edit.SetPrevLogNumber(0);
     edit.SetLogNumber(logfile_number_);  // Earlier logs no longer needed
     // 根据edit的变化生成新版本，由于是生成新的sstable文件，所以是edit->new_files_中有新数据
-    s = versions_->LogAndApply(&edit, &mutex_);   // for CompactMemTable
+    s = versions_->LogAndApply(&edit, &mutex_);
   }
 
   if (s.ok()) {
@@ -566,7 +566,7 @@ void DBImpl::CompactMemTable() {
     imm_->Unref();
     imm_ = nullptr;
     has_imm_.Release_Store(nullptr);
-    DeleteObsoleteFiles();  // in CompactMemTable
+    DeleteObsoleteFiles();
   } else {
     RecordBackgroundError(s);
   }
@@ -755,7 +755,7 @@ void DBImpl::BackgroundCompaction() {
     }
     CleanupCompaction(compact);
     c->ReleaseInputs();
-    DeleteObsoleteFiles();  // in BackgroundCompaction
+    DeleteObsoleteFiles();
   }
   delete c;
 
@@ -1568,10 +1568,10 @@ Status DB::Open(const Options& options, const std::string& dbname,
   if (s.ok() && save_manifest) {  // save_manifest==true表示使用新的manifest文件
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
-    s = impl->versions_->LogAndApply(&edit, &impl->mutex_);   // in DB::Open
+    s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
   }
   if (s.ok()) {
-    impl->DeleteObsoleteFiles();  // in DB::Open
+    impl->DeleteObsoleteFiles();
     impl->MaybeScheduleCompaction();
   }
   impl->mutex_.Unlock();

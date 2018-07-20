@@ -303,7 +303,7 @@ class VersionSet {
   uint64_t next_file_number_;
   uint64_t manifest_file_number_; // 当前manifest文件序号
   uint64_t last_sequence_;        // 初始值为0，每次write根据合并写的个数增加响应序号，recover后恢复到最新值
-  uint64_t log_number_;           // 当前版本的bin log文件序号
+  uint64_t log_number_;           // 最新版本的bin log文件序号
   uint64_t prev_log_number_;      // 0 or backing store for memtable being compacted
 
   // Opened lazily

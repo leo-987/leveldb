@@ -142,7 +142,7 @@ class DBImpl : public DB {
   MemTable* imm_ GUARDED_BY(mutex_);  // Memtable being compacted
   port::AtomicPointer has_imm_;       // So bg thread can detect non-null imm_
   WritableFile* logfile_;             // 当前log的WritableFile对象
-  uint64_t logfile_number_ GUARDED_BY(mutex_);  // log文件名中的序号部分
+  uint64_t logfile_number_ GUARDED_BY(mutex_);  // 当前log序号
   log::Writer* log_;                  // 负责写log的对象
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
