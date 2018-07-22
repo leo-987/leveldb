@@ -461,7 +461,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
         env_->NewAppendableFile(fname, &logfile_).ok()) {
       Log(options_.info_log, "Reusing old log %s \n", fname.c_str());
       log_ = new log::Writer(logfile_, lfile_size);
-      logfile_number_ = log_number;
+      logfile_number_ = log_number; // 复用原来的log
       if (mem != nullptr) {
         mem_ = mem;     // 如果复用原来的log，则直接使用刚从log中恢复的memtable
         mem = nullptr;
@@ -1155,7 +1155,7 @@ Status DBImpl::Get(const ReadOptions& options,
 
   MemTable* mem = mem_;
   MemTable* imm = imm_;
-  Version* current = versions_->current();
+  Version* current = versions_->current();  // 为什么这里去当前版本
   mem->Ref();
   if (imm != nullptr) imm->Ref();
   current->Ref();
@@ -1168,9 +1168,9 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Unlock();
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
-    if (mem->Get(lkey, value, &s)) {  // in DBImpl::Get
+    if (mem->Get(lkey, value, &s)) {
       // Done，找到
-    } else if (imm != nullptr && imm->Get(lkey, value, &s)) { // in DBImpl::Get
+    } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
       // Done，找到
     } else {
       s = current->Get(options, lkey, value, &stats);
