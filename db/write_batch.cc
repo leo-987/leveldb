@@ -43,6 +43,7 @@ size_t WriteBatch::ApproximateSize() {
   return rep_.size();
 }
 
+// 使用handler处理WriteBatch中的每一条记录
 Status WriteBatch::Iterate(Handler* handler) const {
   Slice input(rep_);
   if (input.size() < kHeader) {
@@ -60,7 +61,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       case kTypeValue:
         if (GetLengthPrefixedSlice(&input, &key) &&
             GetLengthPrefixedSlice(&input, &value)) {
-          handler->Put(key, value);
+          handler->Put(key, value); // 这里传入原生的key、value
         } else {
           return Status::Corruption("bad WriteBatch Put");
         }
@@ -120,16 +121,16 @@ namespace {
 // MemTable插入器，负责mem_的插入删除操作，接口使用前需要设置好sequence_和mem_
 class MemTableInserter : public WriteBatch::Handler {
  public:
-  SequenceNumber sequence_; // 操作对应的sequece
+  SequenceNumber sequence_; // 操作对应的sequece，向memtable插入数据时被初始化
   MemTable* mem_;           // 指向需要操作的MemTable
 
   virtual void Put(const Slice& key, const Slice& value) {
     mem_->Add(sequence_, kTypeValue, key, value);
-    sequence_++;
+    sequence_++;    // 每一对kv的序列号都是唯一的
   }
   virtual void Delete(const Slice& key) {
     mem_->Add(sequence_, kTypeDeletion, key, Slice());
-    sequence_++;
+    sequence_++;    // 每一对kv的序列号都是唯一的
   }
 };
 }  // namespace
@@ -137,7 +138,7 @@ class MemTableInserter : public WriteBatch::Handler {
 Status WriteBatchInternal::InsertInto(const WriteBatch* b,
                                       MemTable* memtable) {
   MemTableInserter inserter;
-  inserter.sequence_ = WriteBatchInternal::Sequence(b);
+  inserter.sequence_ = WriteBatchInternal::Sequence(b); // 根据WriteBatch初始化序列号
   inserter.mem_ = memtable;
   return b->Iterate(&inserter);
 }

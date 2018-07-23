@@ -189,6 +189,7 @@ const char* GetLengthPrefixedSlice(const char* p, const char* limit,
   return p + len;
 }
 
+// input会向前移动
 bool GetLengthPrefixedSlice(Slice* input, Slice* result) {
   uint32_t len;
   if (GetVarint32(input, &len) &&

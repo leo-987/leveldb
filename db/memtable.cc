@@ -90,9 +90,9 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   //  key bytes    : char[internal_key.size()]
   //  value_size   : varint32 of value.size()
   //  value bytes  : char[value.size()]
-  size_t key_size = key.size();             // 用户key
+  size_t key_size = key.size();             // 用户原生key
   size_t val_size = value.size();
-  size_t internal_key_size = key_size + 8;  // 用户key + sequence_number + type(标志更新操作还是删除操作)
+  size_t internal_key_size = key_size + 8;  // 用户原生key + sequence_number + type(标志更新操作还是删除操作)
   const size_t encoded_len =
       VarintLength(internal_key_size) + internal_key_size +
       VarintLength(val_size) + val_size;
@@ -113,7 +113,7 @@ void MemTable::Add(SequenceNumber s, ValueType type,
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();  // 把LookupKey转化成Slice
   Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());           // in MemTable::Get，查找结果保存在iter.node_
+  iter.Seek(memkey.data());           // 参数包括len+key，查找结果保存在iter.node_
   if (iter.Valid()) {                 // 是否找到对应node
     // entry format is:
     //    klength  varint32
@@ -124,15 +124,17 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     // Check that it belongs to same user key.  We do not check the
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
+
+    // 跳表中找到的node，序列号一定不会大于需要查找的key的序列号
     const char* entry = iter.key();
     uint32_t key_length;
 
-    // key_len(32bit) | user_key | sequence_number | type | value_len | value
-    // ↑
-    // key_ptr
+    // key_len | user_key | sequence_number | type | value_len | value
+    //         ↑
+    //      key_ptr
     const char* key_ptr = GetVarint32Ptr(entry, entry+5, &key_length);
 
-    // 对比key，实际是两个Slice的对比
+    // 对比ursr_key，实际是两个Slice的对比
     if (comparator_.comparator.user_comparator()->Compare(
             Slice(key_ptr, key_length - 8),
             key.user_key()) == 0) {
@@ -140,9 +142,9 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
       const uint64_t tag = DecodeFixed64(key_ptr + key_length - 8);
       switch (static_cast<ValueType>(tag & 0xff)) {
         case kTypeValue: {
-          // key_len(32bit) | user_key | sequence_number | type | value_len | value
-          //                                                    ↑
-          //                                           (key_ptr + key_length)
+          // key_len | user_key | sequence_number | type | value_len | value
+          //                                             ↑
+          //                                    (key_ptr + key_length)
           Slice v = GetLengthPrefixedSlice(key_ptr + key_length);
           value->assign(v.data(), v.size());
           return true;

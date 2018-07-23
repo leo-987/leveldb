@@ -202,6 +202,11 @@ class LookupKey {
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
+  //  +-------------------+----------+-------------------------+--------------+
+  //  | internal_key_size | user_key | sequence_number(7 byte) | type(1 byte) |
+  //  +-------------------+----------+-------------------------+--------------+
+  //  ↑                   ↑                                                   ↑
+  //  start_            kstart_                                              end_
   const char* start_;
   const char* kstart_;
   const char* end_;
