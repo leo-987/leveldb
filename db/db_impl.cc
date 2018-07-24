@@ -203,8 +203,8 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
 
 // 删除过期或无效文件，在每次compaction或者recovery结尾执行，不同类型的文件选择不同的删除策略：
 //  log：只保留最新的版本
-//  manifest：只保留最新的版本
-//  sstable：只保留所有版本引用到的
+//  manifest：只保留CURRENT文件指向的
+//  sstable：只保留被任一version引用到的
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 

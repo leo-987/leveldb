@@ -719,7 +719,7 @@ class VersionSet::Builder {
       // same as the compaction of 40KB of data.  We are a little
       // conservative and allow approximately one seek for every 16KB
       // of data before triggering a compaction.
-      // 假设1次查询花费的时间和合并16KB花费的时间相同，则一个文件允许(file_size/16KB)次无效查询
+      // 假设1次查询花费的时间和合并16KB花费的时间相同，则一个文件允许(file_size/16KB)次查询，超过次数之后会主动进行合并
       f->allowed_seeks = (f->file_size / 16384);
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
@@ -1229,7 +1229,7 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   return result;
 }
 
-// 把所有version和所有level的sstable元信息放到live中
+// 把所有version引用到的sstable文件的元信息放到live中
 void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {
   for (Version* v = dummy_versions_.next_;
        v != &dummy_versions_;

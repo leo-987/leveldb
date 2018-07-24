@@ -14,9 +14,9 @@ namespace leveldb {
 
 class VersionSet;
 
-// 此类记录sstable文件的元数据
+// 此类记录一个sstable文件的元数据
 struct FileMetaData {
-  int refs;
+  int refs;                   // 文件被不同version引用的个数，不为0时无法删除
   int allowed_seeks;          // Seeks allowed until compaction
   uint64_t number;            // 文件序号
   uint64_t file_size;         // File size in bytes

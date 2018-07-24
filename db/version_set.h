@@ -132,19 +132,21 @@ class Version {
   VersionSet* vset_;            // VersionSet to which this Version belongs
   Version* next_;               // Next version in linked list
   Version* prev_;               // Previous version in linked list
-  int refs_;                    // Number of live refs to this version
+  int refs_;                    // Number of live refs to this version，该version的引用计数，不为0时无法删除
 
   // List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
+  // seek触发相关变量
   FileMetaData* file_to_compact_; // seek次数过多需要合并的文件
   int file_to_compact_level_;     // seek合并对应的层数
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
-  double compaction_score_; // 合并的必要性，越大越需要合并
+  // size触发相关变量
+  double compaction_score_; // 合并的必要性，>1表示需要立即合并
   int compaction_level_;    // 需要合并的level
 
   explicit Version(VersionSet* vset)
@@ -270,7 +272,7 @@ class VersionSet {
   const char* LevelSummary(LevelSummaryStorage* scratch) const;
 
  private:
-  class Builder;
+  class Builder;  // 负责VersionEdit合并工作
 
   friend class Compaction;
   friend class Version;
