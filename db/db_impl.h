@@ -157,7 +157,7 @@ class DBImpl : public DB {
   std::set<uint64_t> pending_outputs_ GUARDED_BY(mutex_);
 
   // Has a background compaction been scheduled or is running?
-  bool background_compaction_scheduled_ GUARDED_BY(mutex_); // 是否有后台线程正在工作
+  bool background_compaction_scheduled_ GUARDED_BY(mutex_); // 是否有后台线程正在进行合并
 
   // Information for a manual compaction
   struct ManualCompaction {

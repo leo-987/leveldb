@@ -37,6 +37,12 @@ static int64_t ExpandedCompactionByteSizeLimit(const Options* options) {
   return 25 * TargetFileSize(options);
 }
 
+// level层的总文件大小理论上限值
+// level-1: 10M
+// level-2: 100M
+// level-3: 1000M
+// level-4: 10000M
+// ...
 static double MaxBytesForLevel(const Options* options, int level) {
   // Note: the result for level zero is not really used since we set
   // the level-0 compaction threshold based on number of files.
@@ -1101,6 +1107,7 @@ void VersionSet::MarkFileNumberUsed(uint64_t number) {
   }
 }
 
+// 遍历所有level并打分，记录分数最高的level，准备下一次的合并
 void VersionSet::Finalize(Version* v) {
   // Precomputed best level for next compaction
   int best_level = -1;
@@ -1121,12 +1128,12 @@ void VersionSet::Finalize(Version* v) {
       // setting, or very high compression ratios, or lots of
       // overwrites/deletions).
 
-      // level-0的文件数越多，越有可能被合并
+      // 计算level-0文件个数，文件数越多，越先被合并
       score = v->files_[level].size() /
           static_cast<double>(config::kL0_CompactionTrigger);
     } else {
       // Compute the ratio of current size to size limit.
-      // 其它level的总字节数越大，越有可能被合并
+      // 其它level的总字节数越大，越先被合并
       const uint64_t level_bytes = TotalFileSize(v->files_[level]);
       score =
           static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
@@ -1139,6 +1146,7 @@ void VersionSet::Finalize(Version* v) {
     }
   }
 
+  // 记录分数最高的层和对应的分数，准备下一次合并
   v->compaction_level_ = best_level;
   v->compaction_score_ = best_score;
 }
