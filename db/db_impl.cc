@@ -707,7 +707,9 @@ void DBImpl::BackgroundCompaction() {
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
-  if (is_manual) {  // 手动合并，先忽略
+  if (is_manual) {
+    // 手动合并，先忽略
+
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
@@ -721,7 +723,7 @@ void DBImpl::BackgroundCompaction() {
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
   } else {
-    c = versions_->PickCompaction();    // 计算需要合并哪一层的那哪些sstable
+    c = versions_->PickCompaction();    // 计算需要合并哪一层的哪些sstable
   }
 
   Status status;

@@ -138,13 +138,14 @@ class Version {
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
-  // seek触发相关变量
+  // seek触发compation相关变量
   FileMetaData* file_to_compact_; // seek miss次数过多需要合并的文件
   int file_to_compact_level_;     // seek miss合并对应的层数
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
+  //
   // 0层文件数过多或者其它层单个文件过大，则compaction_score_会大于1
   double compaction_score_; // 合并的必要性，>1表示需要立即合并，分数越高，越先开始合并
   int compaction_level_;    // 需要立即合并的level

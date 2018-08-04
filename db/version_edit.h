@@ -17,7 +17,7 @@ class VersionSet;
 // 此类记录一个sstable文件的元数据
 struct FileMetaData {
   int refs;                   // 文件被不同version引用的个数，不为0时无法删除
-  int allowed_seeks;          // Seeks allowed until compaction
+  int allowed_seeks;          // Seeks allowed until compaction，该sstable文件允许seek miss的次数
   uint64_t number;            // 文件序号
   uint64_t file_size;         // File size in bytes
   InternalKey smallest;       // Smallest internal key served by table

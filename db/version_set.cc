@@ -406,6 +406,8 @@ Status Version::Get(const ReadOptions& options,
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != nullptr && stats->seek_file == nullptr) {
         // We have had more than one seek for this read.  Charge the 1st file.
+        // 如果一次读取过程查找了一个以上的sstable，则至少有一个sstable未命中，
+        // 那么会记录第一个（未命中的）sstable，并在后面的UpdateStats函数中将seek变量减1
         stats->seek_file = last_file_read;
         stats->seek_file_level = last_file_read_level;
       }
@@ -443,10 +445,12 @@ Status Version::Get(const ReadOptions& options,
   return Status::NotFound(Slice());  // Use an empty error message for speed
 }
 
+// 如果前面的GET过程，查找的sstable个数大于一个，则需要将第一个未命中的sstable中的seek miss次数减1
+// 如果seek miss次数等于0，表示这个sstable需要进行compaction，记录下这个文件和对应的level，以便后面进行compaction
 bool Version::UpdateStats(const GetStats& stats) {
   FileMetaData* f = stats.seek_file;
   if (f != nullptr) {
-    f->allowed_seeks--;
+    f->allowed_seeks--; // 发生了seek miss，更新seek miss次数
     if (f->allowed_seeks <= 0 && file_to_compact_ == nullptr) {
       file_to_compact_ = f;
       file_to_compact_level_ = stats.seek_file_level;
@@ -1373,9 +1377,9 @@ Compaction* VersionSet::PickCompaction() {
       // Wrap-around to the beginning of the key space
       c->inputs_[0].push_back(current_->files_[level][0]);
     }
-  } else if (seek_compaction) {
+  } else if (seek_compaction) { // seek miss次数过多
     level = current_->file_to_compact_level_;
-    c = new Compaction(options_, level);  // seek次数过多需要合并
+    c = new Compaction(options_, level);  // seek miss次数过多需要合并
     c->inputs_[0].push_back(current_->file_to_compact_);
   } else {
     return nullptr;
