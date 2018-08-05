@@ -204,7 +204,7 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
 // 删除过期或无效文件，在每次compaction或者recovery结尾执行，不同类型的文件选择不同的删除策略：
 //  log：只保留最新的版本
 //  manifest：只保留CURRENT文件指向的
-//  sstable：只保留被任一version引用到的
+//  sstable：只保留被任意version引用到的
 void DBImpl::DeleteObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -257,7 +257,7 @@ void DBImpl::DeleteObsoleteFiles() {
         Log(options_.info_log, "Delete type=%d #%lld\n",
             static_cast<int>(type),
             static_cast<unsigned long long>(number));
-        env_->DeleteFile(dbname_ + "/" + filenames[i]); // 删除文件
+        env_->DeleteFile(dbname_ + "/" + filenames[i]); // 使用unlink删除文件
       }
     }
   }
@@ -919,7 +919,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   assert(versions_->NumLevelFiles(compact->compaction->level()) > 0);
   assert(compact->builder == nullptr);
   assert(compact->outfile == nullptr);
-  if (snapshots_.empty()) {
+  if (snapshots_.empty()) { // snapshots_空表示用户未调用GetSnapshot指定快照，那么所有非最新序列号的kv都可以删除
     compact->smallest_snapshot = versions_->LastSequence();
   } else {
     compact->smallest_snapshot = snapshots_.oldest()->sequence_number();
@@ -936,6 +936,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   std::string current_user_key;
   bool has_current_user_key = false;
   SequenceNumber last_sequence_for_key = kMaxSequenceNumber;
+
+  // 遍历所有参与合并的所有kv，根据一定策略确定是否保留此kv
+  // key相同的kv对，sequence number大的优先遍历
   for (; input->Valid() && !shutting_down_.Acquire_Load(); ) {
     // Prioritize immutable compaction work
     // 如果immutable不为NULL，优先将它写入sstable，防止用户写操作阻塞
@@ -980,6 +983,17 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       // 下面的代码是判断当前key是否应该保存在sstable中
       if (last_sequence_for_key <= compact->smallest_snapshot) {  // 序列号过期的都被丢弃
         // Hidden by an newer entry for same user key
+
+        // last_sequence_for_key初始值为一个极大值，因此
+        // 1. 如果一个key未建立快照，则一定会被保留
+        // 2. 如果一个key有相关联的快照，则拥有最大序列号的key一定会被保留
+        // 后续拥有相同key，sequence number更小的kv，则需要根据用户是否有保存快照来决定是否保留
+        // 1. 如果kv的序列号小于最老快照点的序列号，则删除
+        // 2. 如果kv的序列号大于最老快照点的序列号，则保留
+        // 例如
+        // (k, v1) ↓ (k, v2) ↓ (k, v3) ↓ (k, v4)
+        //     snapshot1 snapshot2 snapshot3
+        // 这种情况，smallest_snapshot = snapshot1，因此snapshot1之前的(k, v1)会在合并时被丢弃
         drop = true;    // (A)
       } else if (ikey.type == kTypeDeletion &&
                  ikey.sequence <= compact->smallest_snapshot &&
@@ -994,7 +1008,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
         // 这里的意思应该是，某个key被标记为删除，但实际上可能并不能删除，应为更底层的level可能含有这个key，
         // 如果将当前key删除却保留了底层level的key，那么下次读这个key时就会读到一个已经被删除的key，是不符合预期的，
-        // 但如果key的序列号比smallest_snapshot大，是不能被删除的，为什么？
+        // 但如果key的序列号比smallest_snapshot大，是不能被删除的，举例如下
+        // (k, v1) ↓ (k, deletion) ↓ (k, v3)
+        //     snapshot1       snapshot2
+        // 这种情况，smallest_snapshot = snapshot1，(k, deletion)这个kv对是不能被删除的
+        // 否则用户创建snapshot2后，本应返回404，却返回了(k, v1)
         drop = true;
       }
 
@@ -1209,6 +1227,8 @@ void DBImpl::RecordReadSample(Slice key) {
   }
 }
 
+// 供用户调用，表示建立一个当前DB的快照，防止compaction时kv被覆盖
+// 实际是保存调用时刻点的sequence number
 const Snapshot* DBImpl::GetSnapshot() {
   MutexLock l(&mutex_);
   return snapshots_.New(versions_->LastSequence());

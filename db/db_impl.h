@@ -150,7 +150,7 @@ class DBImpl : public DB {
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);
   WriteBatch* tmp_batch_ GUARDED_BY(mutex_);
 
-  SnapshotList snapshots_ GUARDED_BY(mutex_);
+  SnapshotList snapshots_ GUARDED_BY(mutex_);   // 用户保存的快照集合
 
   // Set of table files to protect from deletion because they are
   // part of ongoing compactions.

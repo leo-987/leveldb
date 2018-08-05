@@ -129,13 +129,13 @@ class Version {
                           void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet* vset_;            // VersionSet to which this Version belongs
-  Version* next_;               // Next version in linked list
-  Version* prev_;               // Previous version in linked list
+  VersionSet* vset_;            // VersionSet to which this Version belongs，所有version都属于一个version set
+  Version* next_;               // Next version in linked list，后一个version
+  Version* prev_;               // Previous version in linked list，前一个version
   int refs_;                    // Number of live refs to this version，该version的引用计数，不为0时无法删除
 
   // List of files per level
-  std::vector<FileMetaData*> files_[config::kNumLevels];
+  std::vector<FileMetaData*> files_[config::kNumLevels];  // 该version所包含的所有sstable元信息
 
   // Next file to compact based on seek stats.
   // seek触发compation相关变量

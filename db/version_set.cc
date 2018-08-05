@@ -4,19 +4,14 @@
 
 #include "db/version_set.h"
 
-#include <algorithm>
-#include <stdio.h>
 #include "db/filename.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/memtable.h"
 #include "db/table_cache.h"
 #include "leveldb/env.h"
-#include "leveldb/table_builder.h"
 #include "table/merger.h"
 #include "table/two_level_iterator.h"
-#include "util/coding.h"
-#include "util/logging.h"
 
 namespace leveldb {
 
@@ -70,7 +65,7 @@ static int64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
 }
 
 Version::~Version() {
-  assert(refs_ == 0);
+  assert(refs_ == 0); // version的引用计数为0才能删除
 
   // Remove from linked list
   prev_->next_ = next_;
@@ -645,6 +640,7 @@ class VersionSet::Builder {
     }
   };
 
+  // BySmallestKey是一个比较算子，实际是比较不同文件的最小key
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
   struct LevelState {
     std::set<uint64_t> deleted_files;
@@ -752,7 +748,8 @@ class VersionSet::Builder {
       const FileSet* added = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added->size());
 
-      // added_files中的文件应该是有序的
+      // added_files中的文件应该是按key有序的
+      // 将原version中的sstable和新sstable按照key从小到大加入到新version中
       for (FileSet::const_iterator added_iter = added->begin();
            added_iter != added->end();
            ++added_iter) {
@@ -768,6 +765,7 @@ class VersionSet::Builder {
       }
 
       // Add remaining base files
+      // 原version中剩余的sstable加入到新version中
       for (; base_iter != base_end; ++base_iter) {
         MaybeAddFile(v, level, *base_iter);
       }
@@ -802,7 +800,7 @@ class VersionSet::Builder {
         assert(vset_->icmp_.Compare((*files)[files->size()-1]->largest,
                                     f->smallest) < 0);
       }
-      f->refs++;
+      f->refs++;  // 文件加入了某个version，所以引用计数+1
       files->push_back(f);
     }
   }
@@ -877,7 +875,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   // 将当前version和新的edit合并生成新version
   Version* v = new Version(this);
   {
-    Builder builder(this, current_);
+    Builder builder(this, current_);  // 以当前version为基础建立一个builder对象
     builder.Apply(edit);
     builder.SaveTo(v);
   }
@@ -1111,7 +1109,7 @@ void VersionSet::MarkFileNumberUsed(uint64_t number) {
   }
 }
 
-// 遍历所有level并打分，记录分数最高的level，准备下一次的合并
+// 遍历传入version的所有level并打分，记录分数最高的level，准备下一次的合并
 void VersionSet::Finalize(Version* v) {
   // Precomputed best level for next compaction
   int best_level = -1;

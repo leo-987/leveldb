@@ -19,13 +19,14 @@ struct FileMetaData {
   int refs;                   // 文件被不同version引用的个数，不为0时无法删除
   int allowed_seeks;          // Seeks allowed until compaction，该sstable文件允许seek miss的次数
   uint64_t number;            // 文件序号
-  uint64_t file_size;         // File size in bytes
-  InternalKey smallest;       // Smallest internal key served by table
-  InternalKey largest;        // Largest internal key served by table
+  uint64_t file_size;         // File size in bytes，sstable文件大小
+  InternalKey smallest;       // Smallest internal key served by table，文件最小key
+  InternalKey largest;        // Largest internal key served by table，文件最大key
 
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) { }
 };
 
+// 记录版本差异
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }
@@ -85,6 +86,7 @@ class VersionEdit {
  private:
   friend class VersionSet;
 
+  // (file_number, level)
   typedef std::set< std::pair<int, uint64_t> > DeletedFileSet;
 
   std::string comparator_;
@@ -99,8 +101,8 @@ class VersionEdit {
   bool has_last_sequence_;
 
   std::vector< std::pair<int, InternalKey> > compact_pointers_;
-  DeletedFileSet deleted_files_;                                // 需要删除的文件
-  std::vector< std::pair<int, FileMetaData> > new_files_;       // 需要添加的文件
+  DeletedFileSet deleted_files_;                                // 删除了哪些文件
+  std::vector< std::pair<int, FileMetaData> > new_files_;       // 添加了哪些文件
 };
 
 }  // namespace leveldb
